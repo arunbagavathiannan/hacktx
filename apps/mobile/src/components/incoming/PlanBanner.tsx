@@ -36,6 +36,7 @@ export function PlanBanner({ title, body, members, onPlan, onDismiss }: Props) {
         elevation: 16,
       }}
       accessibilityRole="alert"
+      accessibilityLiveRegion="assertive"
     >
       <View className="overflow-hidden rounded-[28px] border border-line bg-raised">
         <View className="gap-3 p-4">
@@ -44,15 +45,13 @@ export function PlanBanner({ title, body, members, onPlan, onDismiss }: Props) {
               <ChatsCircle size={16} color={colors.bg} weight="fill" />
             </View>
             <Text className="font-body-bold text-xs text-muted">Huddle</Text>
-            <Text className="font-body text-xs text-faint">· now</Text>
+            <Text className="flex-1 font-body text-xs text-faint">· now</Text>
+            <AvatarStack members={members} size="sm" max={3} />
           </View>
 
-          <View className="flex-row items-center gap-3">
-            <View className="flex-1 gap-0.5">
-              <Text className="font-display text-lg leading-6 text-ink">{title}</Text>
-              <Text className="font-body text-sm leading-5 text-muted">{body}</Text>
-            </View>
-            <AvatarStack members={members} size="sm" max={3} />
+          <View className="gap-0.5">
+            <Text className="font-display text-lg leading-6 text-ink">{title}</Text>
+            <Text className="font-body text-sm leading-5 text-muted">{body}</Text>
           </View>
 
           <View className="flex-row gap-2 pt-1">
@@ -60,13 +59,13 @@ export function PlanBanner({ title, body, members, onPlan, onDismiss }: Props) {
               label="Not now"
               variant="secondary"
               onPress={onDismiss}
-              className="h-11 flex-1 px-4"
+              className="h-12 flex-1 px-4"
             />
             <Button
               label="Plan it"
               onPress={onPlan}
               icon={<Sparkle size={18} color={colors.bg} weight="fill" />}
-              className="h-11 flex-1 px-4"
+              className="h-12 flex-1 px-4"
             />
           </View>
         </View>

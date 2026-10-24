@@ -49,7 +49,7 @@ export function TypingIndicator({ member }: { member: Member }) {
     >
       <View className="flex-row items-end gap-2.5">
         <Avatar member={member} size="sm" />
-        <View className="flex-row items-center gap-1.5 rounded-[20px] rounded-bl-md border border-line bg-surface px-4 py-3.5">
+        <View className="flex-row items-center gap-1.5 rounded-card rounded-bl-md border border-line bg-surface px-4 py-3.5">
           <Dot delay={0} />
           <Dot delay={130} />
           <Dot delay={260} />

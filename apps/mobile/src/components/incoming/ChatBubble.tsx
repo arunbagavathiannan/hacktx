@@ -25,7 +25,7 @@ export function ChatBubble({ message, sender }: { message: ChatMessage; sender: 
           <Text className="ml-3 font-body-bold text-xs" style={{ color: sender.color }}>
             {sender.name}
           </Text>
-          <View className="rounded-[20px] rounded-bl-md border border-line bg-surface px-4 py-2.5">
+          <View className="rounded-card rounded-bl-md border border-line bg-surface px-4 py-2.5">
             <Text className="font-body text-base leading-6 text-ink">{message.text}</Text>
           </View>
           <Text className="ml-3 font-body text-[11px] text-faint">{clockTime(message.at)}</Text>

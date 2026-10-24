@@ -1,43 +1,82 @@
 import * as Notifications from "expo-notifications";
 import { Platform } from "react-native";
 
-const CHANNEL_ID = "plans";
+// Reusable helper for the notification-listener track: posts the real "Plan it?" heads-up
+// notification when the detector finds a plan. Nothing calls it yet. The /plan/incoming
+// simulation uses only the in-app banner.
+//
+// Before using it, the app must:
+// - call Notifications.setNotificationHandler (once, in the root layout) with
+//   shouldShowBanner: true, or Android drops notifications that arrive while the app is
+//   in the foreground;
+// - handle taps by routing to response.notification.request.content.data.url
+//   (Notifications.useLastNotificationResponse or addNotificationResponseReceivedListener);
+// - ask for permission before the demo (onboarding or /preflight), so the system dialog
+//   never covers the popup on stage.
+// Every function here is a no-op on web and never throws.
 
-// Posts the real heads-up notification on the phone, next to the in-app banner.
-// Tapping it opens /plan/working (the notification listener track handles the tap).
-// Never throws: if permission is denied or anything fails, the in-app banner still works.
-// Returns the notification id so it can be dismissed if the user taps the in-app banner instead.
-export async function postPlanNotification(title: string, body: string) {
-  if (Platform.OS === "web") return null;
+export const PLAN_CHANNEL_ID = "plans";
+// Fixed id: posting again replaces the previous suggestion instead of stacking duplicates.
+export const PLAN_NOTIFICATION_ID = "plan-suggestion";
+
+// HIGH importance is what makes Android show it as a heads-up notification. Android 13+
+// only shows the permission prompt once a channel exists, so this runs first.
+export async function ensurePlanChannel() {
+  if (Platform.OS !== "android") return;
   try {
-    if (Platform.OS === "android") {
-      // Android 13+ only shows the permission prompt once a channel exists.
-      // HIGH importance is what makes it pop up as a heads-up notification.
-      await Notifications.setNotificationChannelAsync(CHANNEL_ID, {
-        name: "Plan suggestions",
-        description: "When Huddle spots a plan in your chats",
-        importance: Notifications.AndroidImportance.HIGH,
-      });
-    }
-
-    const current = await Notifications.getPermissionsAsync();
-    const granted = current.granted || (await Notifications.requestPermissionsAsync()).granted;
-    if (!granted) return null;
-
-    return await Notifications.scheduleNotificationAsync({
-      content: { title, body, data: { url: "/plan/working" } },
-      trigger: Platform.OS === "android" ? { channelId: CHANNEL_ID } : null,
+    await Notifications.setNotificationChannelAsync(PLAN_CHANNEL_ID, {
+      name: "Plan suggestions",
+      description: "When Huddle spots a plan in your chats",
+      importance: Notifications.AndroidImportance.HIGH,
     });
   } catch {
-    return null;
+    // Channel creation failing just means the default channel is used.
   }
 }
 
-export async function dismissPlanNotification(id: string | null) {
-  if (!id || Platform.OS === "web") return;
+// True if notifications may be shown. Asks only if not already decided.
+export async function requestNotificationPermission() {
+  if (Platform.OS === "web") return false;
   try {
-    await Notifications.dismissNotificationAsync(id);
+    await ensurePlanChannel();
+    const current = await Notifications.getPermissionsAsync();
+    if (current.granted) return true;
+    if (!current.canAskAgain) return false;
+    return (await Notifications.requestPermissionsAsync()).granted;
   } catch {
-    // Already gone; nothing to do.
+    return false;
+  }
+}
+
+// Posts (or replaces) the plan suggestion. Returns false if it couldn't be shown.
+export async function postPlanNotification({
+  title,
+  body,
+  url = "/plan/working",
+}: {
+  title: string;
+  body: string;
+  url?: string;
+}) {
+  if (!(await requestNotificationPermission())) return false;
+  try {
+    await Notifications.scheduleNotificationAsync({
+      identifier: PLAN_NOTIFICATION_ID,
+      content: { title, body, data: { url } },
+      trigger: Platform.OS === "android" ? { channelId: PLAN_CHANNEL_ID } : null,
+    });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+// Clears the suggestion from the shade, e.g. once the user opened the plan in the app.
+export async function dismissPlanNotification() {
+  if (Platform.OS === "web") return;
+  try {
+    await Notifications.dismissNotificationAsync(PLAN_NOTIFICATION_ID);
+  } catch {
+    // Already gone.
   }
 }

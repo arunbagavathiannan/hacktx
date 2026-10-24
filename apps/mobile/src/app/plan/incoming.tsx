@@ -2,10 +2,17 @@ import * as Haptics from "expo-haptics";
 import { router, useLocalSearchParams } from "expo-router";
 import { CaretLeft, PaperPlaneTilt, Plus, Sparkle } from "phosphor-react-native";
 import { useEffect, useRef, useState } from "react";
-import { Platform, Pressable, ScrollView, type ScrollViewInstance, Text, View } from "react-native";
+import {
+  AccessibilityInfo,
+  Platform,
+  Pressable,
+  ScrollView,
+  type ScrollViewInstance,
+  Text,
+  View,
+} from "react-native";
 import Animated, { FadeIn, useReducedMotion } from "react-native-reanimated";
 import { ChatBubble } from "@/components/incoming/ChatBubble";
-import { dismissPlanNotification, postPlanNotification } from "@/components/incoming/notify";
 import { PlanBanner } from "@/components/incoming/PlanBanner";
 import { TypingIndicator } from "@/components/incoming/TypingIndicator";
 import { AvatarStack, Screen } from "@/components/ui";
@@ -25,7 +32,8 @@ function memberFor(id: string): Member {
 
 const friends = members.filter((m) => !m.isYou);
 
-// Who to name in the popup: whoever first mentioned the destination ("denver??" -> Sam).
+// MOCK: who to name in the popup, guessed from whoever first mentioned the destination
+// ("denver??" -> Sam). The real detector returns the name with the plan.
 const city = trip.destination.city;
 const leadId =
   chat.find((m) => m.text.toLowerCase().includes(city.toLowerCase()))?.from ?? friends[0]?.id;
@@ -36,7 +44,9 @@ const bannerBody = `Huddle spotted a trip in ${trip.sourceChat.name}`;
 
 // Step 1 of the demo: the group chat fills up, then Huddle's heads-up banner drops in.
 // MOCK: messages come from mocks/chat; on the phone the real ones come from the notification
-// listener. Dev: /plan/incoming?demo=banner shows the finished chat with the banner open.
+// listener. This simulation only shows the in-app banner; the real system notification is
+// the listener track's job (see components/incoming/notify.ts).
+// Dev: /plan/incoming?demo=banner shows the finished chat with the banner open.
 export default function Incoming() {
   const { demo } = useLocalSearchParams<{ demo?: string }>();
   const reduceMotion = useReducedMotion();
@@ -44,8 +54,7 @@ export default function Incoming() {
 
   const [shown, setShown] = useState(instant ? chat.length : 0);
   const [banner, setBanner] = useState<BannerState>(instant ? "open" : "hidden");
-  const notificationId = useRef<string | null>(null);
-  const notified = useRef(false);
+  const arrived = useRef(false);
   const scroll = useRef<ScrollViewInstance>(null);
 
   // Play the chat: one message every MESSAGE_GAP_MS, then the banner.
@@ -64,18 +73,20 @@ export default function Incoming() {
     return () => timers.forEach(clearTimeout);
   }, [instant]);
 
-  // First time the banner opens: buzz, and post the real heads-up notification on the phone.
+  // First time the banner arrives: buzz and read it out (TalkBack doesn't announce
+  // accessibilityRole="alert" on its own).
   useEffect(() => {
-    if (banner !== "open" || notified.current) return;
-    notified.current = true;
-    if (Platform.OS !== "web") Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-    postPlanNotification(bannerTitle, bannerBody).then((id) => {
-      notificationId.current = id;
-    });
+    if (banner !== "open" || arrived.current) return;
+    arrived.current = true;
+    if (Platform.OS === "web") return;
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    AccessibilityInfo.announceForAccessibility(`${bannerTitle} ${bannerBody}`);
   }, [banner]);
 
+  // push keeps this screen under /plan/working, so Back returns to the finished chat with
+  // the Review pill instead of the open banner (and nothing replays).
   const planIt = () => {
-    dismissPlanNotification(notificationId.current);
+    setBanner("dismissed");
     router.push("/plan/working");
   };
 
@@ -87,7 +98,11 @@ export default function Incoming() {
       <Screen
         className="gap-0 px-0 pt-0"
         footer={
-          <View className="flex-row items-center gap-2" accessibilityElementsHidden>
+          <View
+            className="flex-row items-center gap-2"
+            accessibilityElementsHidden
+            importantForAccessibility="no-hide-descendants"
+          >
             <View className="h-11 w-11 items-center justify-center rounded-full border border-line bg-surface">
               <Plus size={20} color={colors.muted} />
             </View>
@@ -100,12 +115,12 @@ export default function Incoming() {
           </View>
         }
       >
-        <View className="flex-row items-center gap-3 border-b border-line px-3 pb-3 pt-2">
+        <View className="flex-row items-center gap-2 border-b border-line px-2 pb-2 pt-1">
           <Pressable
             accessibilityRole="button"
             accessibilityLabel="Back"
             onPress={goBack}
-            className="h-10 w-10 items-center justify-center rounded-full active:bg-raised"
+            className="h-12 w-12 items-center justify-center rounded-full active:bg-raised"
           >
             <CaretLeft size={22} color={colors.ink} />
           </Pressable>
@@ -140,8 +155,9 @@ export default function Incoming() {
             <Animated.View entering={FadeIn.duration(250)} style={{ alignItems: "center" }}>
               <Pressable
                 accessibilityRole="button"
+                accessibilityLabel="Huddle spotted a plan. Review it."
                 onPress={() => setBanner("open")}
-                className="flex-row items-center gap-2 rounded-full bg-accent-soft px-4 py-2.5 active:opacity-80"
+                className="min-h-12 flex-row items-center gap-2 rounded-full bg-accent-soft px-5 active:opacity-80"
               >
                 <Sparkle size={16} color={colors.accent} weight="fill" />
                 <Text className="font-body-bold text-sm text-accent">
