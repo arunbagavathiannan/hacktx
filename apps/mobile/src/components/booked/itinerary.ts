@@ -1,7 +1,10 @@
+import { groupSize, hotelCost, nightsBetween, placePerPerson } from "@/lib/pricing";
 import type { Flight, Place, PlaceCategory, Trip } from "@/mocks/types";
 
 // Turns the user's picks (Flight.id / Place.id) into a day-by-day itinerary, a per-person
-// cost estimate, and the short text summary that goes back to the group chat.
+// cost estimate, and the short text summary that goes back to the group chat. All price math
+// comes from lib/pricing, so the total matches the map footer's estimatePerPerson (plus any
+// extra hotel night an early flight needs).
 
 const WEEKDAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"] as const;
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
@@ -13,13 +16,6 @@ const FLIGHT_TIME_RE = /^(Sun|Mon|Tue|Wed|Thu|Fri|Sat)\s+(\d{1,2}(?::\d{2})?)\s*
 const EVENT_TIME_RE =
   /^(?:Show|Event)\s+(Sun|Mon|Tue|Wed|Thu|Fri|Sat)\s+(\d{1,2}(?::\d{2})?)\s*(AM|PM)/i;
 
-// Rough per-person cost for Google Places price levels ("$$") that have no dollar amount.
-const PRICE_LEVEL: Record<number, number> = { 1: 15, 2: 30, 3: 60, 4: 100 };
-
-// Assumption (pending Arun's call): the group shares one room, so the hotel is split by
-// everyone on the trip. The stay row shows it, so the assumption is never hidden.
-export const ROOMS = 1;
-
 export type Item =
   | { kind: "flight"; id: string; flight: Flight; perPerson: number }
   | { kind: "place"; id: string; place: Place; perPerson: number; estimate: boolean }
@@ -30,8 +26,9 @@ export type Stay = {
   place: Place;
   nights: number;
   extraNights: number;
-  rooms: number;
-  nightly: number;
+  rooms: number; // derived from group size and the room's capacity (lib/pricing)
+  sleepsPerRoom?: number;
+  nightly: number; // per room
   perPerson: number;
 };
 
@@ -64,14 +61,10 @@ function dayAt(start: Date, offset: number): TripDay {
   };
 }
 
-function nightsOf(trip: Trip) {
-  const ms = parseDate(trip.dates.end).getTime() - parseDate(trip.dates.start).getTime();
-  return Math.max(0, Math.round(ms / 86_400_000));
-}
-
 function tripDays(trip: Trip): TripDay[] {
   const start = parseDate(trip.dates.start);
-  return Array.from({ length: nightsOf(trip) + 1 }, (_, i) => dayAt(start, i));
+  const nights = nightsBetween(trip.dates.start, trip.dates.end);
+  return Array.from({ length: nights + 1 }, (_, i) => dayAt(start, i));
 }
 
 // "Nov 13–15" (or "Nov 30 – Dec 2" across months).
@@ -82,18 +75,6 @@ export function shortDates(trip: Trip) {
   const em = MONTHS[e.getUTCMonth()];
   if (sm === em) return `${sm} ${s.getUTCDate()}–${e.getUTCDate()}`;
   return `${sm} ${s.getUTCDate()} – ${em} ${e.getUTCDate()}`;
-}
-
-function dollars(price: string) {
-  const m = price.match(/\$(\d+)/);
-  return m ? Number(m[1]) : null;
-}
-
-function placeCost(place: Place) {
-  const exact = dollars(place.price);
-  if (exact !== null) return { perPerson: exact, estimate: true };
-  const level = (place.price.match(/\$/g) ?? []).length;
-  return { perPerson: PRICE_LEVEL[level] ?? 0, estimate: true };
 }
 
 function compact(m: RegExpMatchArray) {
@@ -144,8 +125,8 @@ export function buildItinerary(
 ): Itinerary {
   const start = parseDate(trip.dates.start);
   const days = tripDays(trip);
-  const nights = nightsOf(trip);
-  const people = Math.max(1, trip.members.length);
+  const nights = nightsBetween(trip.dates.start, trip.dates.end);
+  const people = groupSize(trip);
   const groups = new Map<number, Day>();
   const notes: string[] = [];
 
@@ -186,20 +167,28 @@ export function buildItinerary(
 
   for (const place of pickedPlaces) {
     if (place.category === "hotel") continue;
-    push(placeDay(place, days), { kind: "place", id: place.id, place, ...placeCost(place) });
+    const cost = placePerPerson(place);
+    push(placeDay(place, days), {
+      kind: "place",
+      id: place.id,
+      place,
+      perPerson: cost.amount,
+      estimate: cost.estimate,
+    });
   }
 
   const stays: Stay[] = [];
   if (hotel) {
-    const nightly = dollars(hotel.price) ?? 0;
-    const total = nights + extraNights;
+    // Rooms come from group size and room capacity; nights include any early-flight night.
+    const cost = hotelCost(hotel, { people, nights: nights + extraNights });
     stays.push({
       place: hotel,
-      nights: total,
+      nights: cost.nights,
       extraNights,
-      rooms: ROOMS,
-      nightly,
-      perPerson: Math.round((nightly * total * ROOMS) / people),
+      rooms: cost.rooms,
+      sleepsPerRoom: hotel.sleepsPerRoom,
+      nightly: cost.total / Math.max(1, cost.rooms * cost.nights),
+      perPerson: cost.perPerson,
     });
   }
 
@@ -247,7 +236,7 @@ const EMOJI: Record<PlaceCategory, string> = {
 };
 
 // One line for the group chat, e.g.
-// "Denver Nov 13–15 ✈️ Southwest Fri 7:05am · 🏨 The Crawford · 🎶 Red Rocks Sun 7pm · ~$307 each. Planned with Huddle"
+// "Denver Nov 13–15 ✈️ Southwest Fri 7:05am · 🏨 Kimpton Hotel Born · 🎶 Red Rocks Sun 7pm · ~$382 each. Planned with Huddle"
 export function summaryText(trip: Trip, it: Itinerary) {
   const parts: string[] = [];
   const items = it.days.flatMap((d) => d.items);

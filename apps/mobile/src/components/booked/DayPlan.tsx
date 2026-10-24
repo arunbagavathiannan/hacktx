@@ -101,7 +101,7 @@ export function StayCard({ stays, trip }: { stays: Stay[]; trip: Trip }) {
             detail={[
               plural(s.nights, "night"),
               s.extraNights ? `incl. ${plural(s.extraNights, "early night")}` : null,
-              plural(s.rooms, "room"),
+              `${plural(s.rooms, "room")}${s.sleepsPerRoom ? ` (sleeps ${s.sleepsPerRoom})` : ""}`,
               `$${s.nightly}/night`,
               `split ${trip.members.length} ways`,
             ]
