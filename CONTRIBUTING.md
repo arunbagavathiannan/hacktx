@@ -9,10 +9,9 @@ This follows the way Meta engineers ship with agents (see `docs/meta-agents-work
 
 ## Before you start
 
-- You need **write access** to this repo. `@claude` ignores everyone else.
-- `@claude` runs on Arun's Claude Max plan. Be specific so one request does the job, instead of
-  many small retries.
-- Each request runs for at most **30 minutes / 30 turns**, one at a time per issue or PR.
+`@claude` runs on Arun's Claude Max plan. Read the rules in
+[`docs/claude-max-plan.md`](docs/claude-max-plan.md) first. That page is owner-only; everything
+else in this file is open for anyone to improve.
 
 ## 1. Pick a track
 
