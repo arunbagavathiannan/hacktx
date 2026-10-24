@@ -17,7 +17,11 @@ export function ProgressBar({ value }: { value: number }) {
   }, [value, p]);
   const style = useAnimatedStyle(() => ({ width: `${Math.min(Math.max(p.value, 0), 1) * 100}%` }));
   return (
-    <View className="h-1.5 overflow-hidden rounded-full bg-raised">
+    <View
+      className="h-1.5 overflow-hidden rounded-full bg-raised"
+      accessibilityRole="progressbar"
+      accessibilityValue={{ min: 0, max: 100, now: Math.round(value * 100) }}
+    >
       <Animated.View
         style={[{ height: "100%", borderRadius: 999, backgroundColor: colors.accent }, style]}
       />
