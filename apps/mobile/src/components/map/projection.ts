@@ -1,5 +1,6 @@
-// Simple equirectangular projection for a city-sized map: longitude is scaled by
-// cos(latitude) so a kilometer is the same length in both directions.
+// Web Mercator projection, the same math slippy-map tiles use (OpenStreetMap, CARTO), so
+// pins land on the right street of the basemap. Coordinates are "world" units in [0, 1]
+// at zoom 0; one tile covers 1 / 2^z of the world at zoom z.
 
 export type Size = { width: number; height: number };
 export type Insets = { top: number; right: number; bottom: number; left: number };
@@ -7,36 +8,62 @@ export type LatLng = { lat: number; lng: number };
 
 export type Projection = {
   project: (lat: number, lng: number) => { x: number; y: number };
+  zoom: number; // fractional; tiles are drawn at the nearest whole zoom, scaled
+  scale: number; // screen px per world unit (256 * 2^zoom)
+  center: { x: number; y: number }; // world coords at the screen anchor
+  anchor: { x: number; y: number }; // screen px where `center` is drawn
 };
 
+export const TILE_SIZE = 256;
 const KM_PER_DEG = 111.32;
+const MAX_ZOOM = 15.5; // a single pin shouldn't zoom in to one building
+const MAX_LAT = 85.0511; // Web Mercator's cutoff
 
 export function kmBetween(a: LatLng, b: LatLng) {
   const cos = Math.cos((((a.lat + b.lat) / 2) * Math.PI) / 180);
   return Math.hypot((a.lat - b.lat) * KM_PER_DEG, (a.lng - b.lng) * KM_PER_DEG * cos);
 }
 
+export function toWorld(lat: number, lng: number) {
+  const clamped = Math.max(-MAX_LAT, Math.min(MAX_LAT, lat));
+  const sin = Math.sin((clamped * Math.PI) / 180);
+  return {
+    x: (lng + 180) / 360,
+    y: 0.5 - Math.log((1 + sin) / (1 - sin)) / (4 * Math.PI),
+  };
+}
+
 // Fit the points inside the size minus insets (room for chips and the flights row).
 export function fitProjection(points: LatLng[], size: Size, insets: Insets): Projection {
-  const lats = points.map((p) => p.lat);
-  const lngs = points.map((p) => p.lng);
-  const [minLat, maxLat] = [Math.min(...lats), Math.max(...lats)];
-  const [minLng, maxLng] = [Math.min(...lngs), Math.max(...lngs)];
-  const lat0 = (minLat + maxLat) / 2;
-  const lng0 = (minLng + maxLng) / 2;
-  const cos = Math.cos((lat0 * Math.PI) / 180);
+  const world = points.map((p) => toWorld(p.lat, p.lng));
+  const xs = world.map((w) => w.x);
+  const ys = world.map((w) => w.y);
+  const [minX, maxX] = [Math.min(...xs), Math.max(...xs)];
+  const [minY, maxY] = [Math.min(...ys), Math.max(...ys)];
 
   const innerW = Math.max(1, size.width - insets.left - insets.right);
   const innerH = Math.max(1, size.height - insets.top - insets.bottom);
-  // Guard against a single point (zero span): fall back to roughly 3 km across.
-  const spanLng = Math.max((maxLng - minLng) * cos, 0.027);
-  const spanLat = Math.max(maxLat - minLat, 0.027);
-  const k = Math.min(innerW / spanLng, innerH / spanLat); // px per degree of latitude
+  const fitScale = Math.min(
+    innerW / Math.max(maxX - minX, 1e-9),
+    innerH / Math.max(maxY - minY, 1e-9),
+  );
+  const zoom = Math.min(MAX_ZOOM, Math.log2(fitScale / TILE_SIZE));
+  const scale = TILE_SIZE * 2 ** zoom;
 
-  const cx = insets.left + innerW / 2;
-  const cy = insets.top + innerH / 2;
+  const center = { x: (minX + maxX) / 2, y: (minY + maxY) / 2 };
+  const anchor = { x: insets.left + innerW / 2, y: insets.top + innerH / 2 };
   return {
-    project: (lat, lng) => ({ x: cx + (lng - lng0) * cos * k, y: cy - (lat - lat0) * k }),
+    zoom,
+    scale,
+    center,
+    anchor,
+    project: (lat, lng) => {
+      const w = toWorld(lat, lng);
+      return {
+        x: anchor.x + (w.x - center.x) * scale,
+        y: anchor.y + (w.y - center.y) * scale,
+      };
+    },
   };
 }
 
