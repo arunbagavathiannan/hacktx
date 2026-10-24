@@ -69,10 +69,15 @@ export default function Summary() {
   const answer = usePlan((s) => s.answer);
 
   const { toAsk, skipped } = useMemo(() => {
-    const resolved = summaryClarifications.map((c) => ({
-      c,
-      fromPrefs: hydrated ? answeredByPreferences(c.id, prefs) : null,
-    }));
+    // Answers are read once here, not as a dependency, so a card never vanishes mid-tap. If
+    // someone already picked something different from what preferences imply (e.g. "Drive"
+    // before saving a 4 hr limit), keep asking instead of claiming the question was skipped.
+    const existing = usePlan.getState().answers;
+    const resolved = summaryClarifications.map((c) => {
+      const fromPrefs = hydrated ? answeredByPreferences(c.id, prefs) : null;
+      const conflict = fromPrefs && existing[c.id] && existing[c.id] !== fromPrefs.option;
+      return { c, fromPrefs: conflict ? null : fromPrefs };
+    });
     return {
       toAsk: resolved
         .filter((r) => !r.fromPrefs)
@@ -95,7 +100,7 @@ export default function Summary() {
   const scrollRef = useRef<ScrollViewInstance>(null);
   const questionsY = useRef(0);
   const onAnswer = (id: string, option: string) => {
-    if (Platform.OS !== "web") Haptics.selectionAsync();
+    if (Platform.OS !== "web") Haptics.selectionAsync().catch(() => {});
     answer(id, option);
     const stillOpen = toAsk.some((c) => c.id !== id && !answers[c.id]);
     if (stillOpen) scrollRef.current?.scrollTo({ y: Math.max(0, questionsY.current - 12) });
@@ -116,7 +121,11 @@ export default function Summary() {
         />
       }
     >
-      <ScrollView ref={scrollRef} contentContainerClassName="gap-5 px-5 pb-8 pt-2">
+      <ScrollView
+        ref={scrollRef}
+        showsVerticalScrollIndicator={false}
+        contentContainerClassName="gap-5 px-5 pb-8 pt-2"
+      >
         <Section index={0}>
           <View className="flex-row items-center gap-2 pt-3">
             <ChatCircleDots size={18} color={colors.accent} weight={icon.activeWeight} />
