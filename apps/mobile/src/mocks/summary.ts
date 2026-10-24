@@ -1,7 +1,7 @@
 // MOCK: what the planner's extract_trip step "understood" from the chat, before a destination
 // is picked. Each fact cites the chat message(s) it came from (ids from mocks/trip.ts `chat`).
 // Real version: the extract_trip tool returns these facts with message ids as evidence.
-import { clarifications as tripClarifications } from "./trip";
+import { trip, clarifications as tripClarifications } from "./trip";
 import type { Clarification, Preferences } from "./types";
 
 export type FactKind = "who" | "when" | "budget" | "from";
@@ -19,13 +19,13 @@ export const facts: Fact[] = [
   {
     kind: "who",
     label: "Who",
-    value: "5 people",
+    value: `${trip.members.length} people`,
     quotes: [], // the screen lists the names instead
   },
   {
     kind: "when",
     label: "When",
-    value: "Fri Nov 13 – Sun Nov 15",
+    value: trip.dates.label,
     quotes: ["m4", "m2"],
   },
   {
