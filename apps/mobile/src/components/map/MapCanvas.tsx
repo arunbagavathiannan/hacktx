@@ -197,20 +197,21 @@ function Basemap({ proj, size }: { proj: Projection; size: Size }) {
         let angle = (Math.atan2(pb.y - pa.y, pb.x - pa.x) * 180) / Math.PI;
         if (angle > 90) angle -= 180;
         if (angle < -90) angle += 180;
+        // Rotate via a plain SVG transform on a group. `rotation`/`origin` props on SvgText
+        // make react-native-svg emit an invalid `transform-origin` DOM attribute on web.
         return (
-          <SvgText
-            key={`${r.name}-label`}
-            x={x}
-            y={y - 4}
-            fill={map.label}
-            fontSize={9}
-            fontFamily="Manrope_600SemiBold"
-            textAnchor="middle"
-            rotation={angle}
-            origin={`${x}, ${y}`}
-          >
-            {r.name}
-          </SvgText>
+          <G key={`${r.name}-label`} transform={`rotate(${angle} ${x} ${y})`}>
+            <SvgText
+              x={x}
+              y={y - 4}
+              fill={map.label}
+              fontSize={9}
+              fontFamily="Manrope_600SemiBold"
+              textAnchor="middle"
+            >
+              {r.name}
+            </SvgText>
+          </G>
         );
       })}
     </>
