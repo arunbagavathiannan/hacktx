@@ -1,0 +1,9 @@
+# Changes to these paths need approval from one of the owners
+# (enforced once "Require review from Code Owners" is on for main).
+# Two owners so neither is blocked from merging their own PRs.
+
+CLAUDE.md         @arunbagavathiannan @Villy-P
+CLAUDE.local.md   @arunbagavathiannan @Villy-P
+/.claude/         @arunbagavathiannan @Villy-P
+/.mcp.json        @arunbagavathiannan @Villy-P
+/.github/         @arunbagavathiannan @Villy-P

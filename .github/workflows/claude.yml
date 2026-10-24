@@ -1,0 +1,72 @@
+name: Claude Code
+
+# Mention @claude in an issue or a PR conversation comment to run Claude.
+# Only users with write access to this repo can trigger it (the action's default).
+#
+# PR review / inline review comments aren't triggers: those events run the
+# workflow file from the PR branch, which can't reach the main-only
+# `claude` environment that holds the token.
+
+on:
+  issue_comment:
+    types: [created]
+  issues:
+    types: [opened, assigned]
+
+concurrency:
+  group: claude-${{ github.event.issue.number }}
+  cancel-in-progress: false
+
+jobs:
+  claude:
+    if: |
+      (github.event_name == 'issue_comment' && contains(github.event.comment.body, '@claude')) ||
+      (github.event_name == 'issues' && (contains(github.event.issue.body, '@claude') || contains(github.event.issue.title, '@claude')))
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    # CLAUDE_CODE_OAUTH_TOKEN lives in this environment (deployment branches: main only),
+    # not as a repo secret, so workflows pushed to other branches can't read it.
+    environment: claude
+    permissions:
+      contents: write
+      pull-requests: write
+      issues: write
+      id-token: write
+      actions: read # Required for Claude to read CI results on PRs
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 1
+
+      - name: Run Claude Code
+        id: claude
+        uses: anthropics/claude-code-action@v1
+        with:
+          # Token from `claude setup-token`.
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+
+          claude_args: |
+            --model claude-opus-5-5
+            --max-turns 30
+
+          # Claude may not change its own instructions, settings, MCP config, or anything in .github/.
+          # The Bash rules are best-effort; CODEOWNERS + branch protection on main is the real guard.
+          settings: |
+            {
+              "permissions": {
+                "deny": [
+                  "Edit(./CLAUDE.md)",
+                  "Edit(./**/CLAUDE.md)",
+                  "Edit(./**/CLAUDE.local.md)",
+                  "Edit(./.claude/**)",
+                  "Edit(./.mcp.json)",
+                  "Edit(./.github/**)",
+                  "Bash(*CLAUDE.md*)",
+                  "Bash(*CLAUDE.local.md*)",
+                  "Bash(*.claude/*)",
+                  "Bash(*.mcp.json*)",
+                  "Bash(*.github/*)"
+                ]
+              }
+            }
