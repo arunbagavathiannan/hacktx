@@ -74,6 +74,11 @@ hardcode the planning pipeline as fixed steps.
 2. **Planner agent** (`supabase/functions/agent`): starts when the user taps the notification.
    Runs Muse Spark with tools (OpenAI-compatible function calling) until the plan is ready
    or it needs the group's input.
+3. **Verifier** (in the same function, after the planner): a separate Muse Spark pass that
+   checks the plan before anyone sees it. Prices and links match the tool results, dates and
+   people match the chat, budget is respected, and deals/coupons were checked. Failures go
+   back to the planner (once) or become an `ask_user`. This is how Huddle earns trust
+   (see `pitch/notes.md`).
 
 **Tools** (each one is a small, typed function in `supabase/functions/_shared/tools/`)
 
@@ -104,6 +109,26 @@ hardcode the planning pipeline as fixed steps.
 - Confirm in Meta's docs that Muse Spark supports function calling and note the model ID
   before building the loop.
 
+## How we build with agents
+
+We build Huddle the way Meta engineers ship with agents (summary in
+`docs/meta-agents-workshop.md`):
+
+1. **Goal and guardrails first.** Every task (issue, `@claude` request, or orchestrated track)
+   states the goal, the files it may touch, and what it must not touch.
+2. **One builder per track,** in its own branch, running the loop: gather context → plan →
+   small change → verify → repeat.
+3. **PR with evidence:** summary, screenshots or a diagram, and a test plan with real output
+   (`pnpm check`, `pnpm check-types`, build output). Never claim a check passed without
+   showing it. Never delete or skip a check to make it pass.
+4. **Reviewer agents before humans,** each from one angle: lint/types, does the code match
+   the PR summary, does the test plan cover edge cases (empty lists, n = 0, missing data, API
+   failure), and does it stay inside CLAUDE.md's scope and guardrails.
+5. **A human merges.** Arun or Villy approves; agents never merge their own PRs.
+
+Keep tasks small: one screen, one tool, or one function per loop. Tracks touch separate
+folders so they can run in parallel without conflicts.
+
 ## Stack
 
 pnpm monorepo:
@@ -112,7 +137,7 @@ pnpm monorepo:
 |---|---|---|
 | `apps/mobile` | The app (the demo) | Expo + React Native, Expo Router, NativeWind (Tailwind), Reanimated, Phosphor icons, react-native-maps (Google Maps), expo-notifications |
 | `apps/mobile/modules/` | Android native code | Local Expo module (Kotlin) wrapping a `NotificationListenerService` |
-| `apps/web` | Landing / pitch site | Next.js, Tailwind, motion.dev, anime.js, three.js, Phosphor icons |
+| `apps/web` | Landing / pitch site | Next.js, Tailwind, motion.dev, anime.js (scroll/step animations), three.js (3D hero), Phosphor icons. Layout reference: [AstroWind](https://github.com/arthelokyo/astrowind) (MIT, Astro); borrow its section structure, but build in Next.js |
 | `supabase/` | Backend | Supabase (Postgres, Realtime for votes + agent steps, Edge Functions for the detector, agent, and tools) |
 
 - **Tooling:** Node 24 LTS, pnpm 10, TypeScript (type-check with `tsgo`), Biome for lint + format.
