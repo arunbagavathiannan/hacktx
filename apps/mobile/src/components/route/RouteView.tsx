@@ -15,6 +15,7 @@ type Props = {
   legs: LegPlan[];
   members: Member[];
   onPickFlight: (leg: LegPlan, flightId: string) => void;
+  globeFrozenAt?: number; // hold the globe at this progress (screenshots)
 };
 
 const WEEKDAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
@@ -34,7 +35,7 @@ function legDay(trip: Trip, leg: LegPlan) {
 
 // Route tab of the map screen: the globe with every stop and leg, then each leg with its
 // own single-select flight picker (or the drive card when the group drives it).
-export function RouteView({ trip, legs, members, onPickFlight }: Props) {
+export function RouteView({ trip, legs, members, onPickFlight, globeFrozenAt }: Props) {
   const [globeFailed, setGlobeFailed] = useState(false);
   // Memoized on the legs' modes so the globe doesn't rebuild when a flight is picked.
   const modes = legs.map((l) => l.mode).join(",");
@@ -52,6 +53,7 @@ export function RouteView({ trip, legs, members, onPickFlight }: Props) {
             points={globe.points}
             arcs={globe.arcs}
             durationMs={1600}
+            frozenAt={globeFrozenAt}
             onFail={() => setGlobeFailed(true)}
           />
           <View className="absolute bottom-3 left-5 right-5 flex-row flex-wrap gap-x-3 gap-y-1">

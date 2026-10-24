@@ -51,7 +51,7 @@ export function FlightsRow({
             <Pressable
               key={f.id}
               accessibilityRole="radio"
-              accessibilityState={{ checked: picked }}
+              aria-checked={picked}
               accessibilityLabel={`${f.airline} ${f.depart}, $${f.pricePerPerson}${
                 picked ? ", the group's flight" : ""
               }`}

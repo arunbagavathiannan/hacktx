@@ -1,7 +1,7 @@
 import { LinearGradient } from "expo-linear-gradient";
 import { router, useLocalSearchParams } from "expo-router";
 import { ArrowRight, CaretLeft } from "phosphor-react-native";
-import { type ComponentProps, type ComponentType, useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import Animated, { FadeIn, useReducedMotion } from "react-native-reanimated";
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -27,18 +27,6 @@ import { multiFlights, multiTrip } from "@/mocks/multi";
 import { isDriving, usePlan } from "@/store/plan";
 import { colors } from "@/theme";
 
-// TODO(callout): the map-tiles PR adds onTogglePick / onOpenDetails / onDismiss to
-// MapCanvas. Until it merges, this cast lets us pass them (MapCanvas ignores them for now).
-// Once merged, delete this and use <MapCanvas> directly with the same three props.
-type CalloutProps = {
-  onTogglePick?: (id: string) => void;
-  onOpenDetails?: (id: string) => void;
-  onDismiss?: () => void;
-};
-const MapCanvasWithCallout = MapCanvas as ComponentType<
-  ComponentProps<typeof MapCanvas> & CalloutProps
->;
-
 // Room on the map for the overlays: filter chips on top, the flights row at the bottom.
 const MAP_INSETS = { top: 96, right: 52, bottom: 132, left: 52 };
 
@@ -47,14 +35,15 @@ const ALL_FLIGHT_IDS = new Set([...flights, ...multiFlights].map((f) => f.id));
 
 // Step 7 of the demo: globe zooms into Denver, then the group picks options from the map.
 // MOCK: demo-only screenshot states, not linked from anywhere in the app:
-// ?demo=globe (globe mid-zoom), ?demo=map (skip the intro), ?demo=sheet (Red Rocks sheet
-// open), ?demo=route (Route tab), ?demo=multi (two-city route, mocks/multi.ts),
-// ?demo=drive (as if the group answered "Drive"; display-only, never saved to usePlan).
+// ?demo=globe (globe mid-zoom), ?demo=map (skip the intro), ?demo=callout (pin callout
+// open), ?demo=sheet (Red Rocks callout + details sheet open), ?demo=route (Route tab),
+// ?demo=multi (two-city route, mocks/multi.ts), ?demo=drive (as if the group answered
+// "Drive"; display-only, never saved to usePlan).
 export default function MapScreen() {
   const { demo } = useLocalSearchParams<{ demo?: string }>();
   const reduceMotion = useReducedMotion();
   const skipIntro =
-    reduceMotion || ["map", "sheet", "route", "multi", "drive"].includes(demo ?? "");
+    reduceMotion || ["map", "callout", "sheet", "route", "multi", "drive"].includes(demo ?? "");
 
   const isMulti = demo === "multi";
   const activeTrip = isMulti ? multiTrip : trip;
@@ -66,9 +55,12 @@ export default function MapScreen() {
     demo === "route" || demo === "multi" ? "route" : "city",
   );
   const [filter, setFilter] = useState<Filter>("all");
-  // selectedId highlights a pin (and, once merged, its callout); sheetId opens PlaceSheet.
-  const [selectedId, setSelectedId] = useState<string | null>(demo === "sheet" ? "a1" : null);
-  const [sheetId, setSheetId] = useState<string | null>(demo === "sheet" ? "a1" : null);
+  // selectedId shows a pin's callout; detailsId opens the full PlaceSheet (from the callout).
+  // MOCK: demo-only initial states for ?demo=callout and ?demo=sheet.
+  const [selectedId, setSelectedId] = useState<string | null>(
+    demo === "sheet" ? "a1" : demo === "callout" ? "d3" : null,
+  );
+  const [detailsId, setDetailsId] = useState<string | null>(demo === "sheet" ? "a1" : null);
 
   const picks = usePlan((s) => s.picks);
   const answers = usePlan((s) => s.answers);
@@ -97,7 +89,7 @@ export default function MapScreen() {
     () => (filter === "all" ? places : places.filter((p) => p.category === filter)),
     [filter],
   );
-  const sheetPlace = places.find((p) => p.id === sheetId) ?? null;
+  const sheetPlace = places.find((p) => p.id === detailsId) ?? null;
   const sheetPicked = sheetPlace ? picks.includes(sheetPlace.id) : false;
   const you = members.find((m) => m.isYou);
   const sheetPickers = sheetPlace
@@ -134,11 +126,6 @@ export default function MapScreen() {
     ...activeTrip.stops.map((s) => s.airport ?? s.city),
   ].join(" → ");
 
-  const openSheet = (id: string) => {
-    setSelectedId(id);
-    setSheetId(id);
-  };
-
   return (
     <View className="flex-1 bg-bg">
       <SafeAreaView className="flex-1" edges={["top", "bottom"]}>
@@ -172,22 +159,22 @@ export default function MapScreen() {
               legs={legs}
               members={members}
               onPickFlight={pickLegFlight}
+              // MOCK: demo-only. Screenshots catch the settled globe, not mid-zoom.
+              globeFrozenAt={demo === "route" || isMulti ? 1 : undefined}
             />
           ) : (
             <>
-              <MapCanvasWithCallout
+              <MapCanvas
                 places={shownPlaces}
                 boundsFrom={places}
                 members={members}
                 pickedIds={picks}
                 selectedId={selectedId}
-                // TODO(callout): once the callout merges, a pin tap should only select
-                // (onSelect={setSelectedId}) and the callout's details button opens the sheet.
-                onSelect={openSheet}
+                onSelect={setSelectedId}
                 insets={MAP_INSETS}
                 revealed={revealed}
                 onTogglePick={togglePick}
-                onOpenDetails={(id) => setSheetId(id)}
+                onOpenDetails={(id) => setDetailsId(id)}
                 onDismiss={() => setSelectedId(null)}
               />
 
@@ -290,10 +277,8 @@ export default function MapScreen() {
         picked={sheetPicked}
         pickers={sheetPickers}
         onToggle={() => sheetPlace && togglePick(sheetPlace.id)}
-        onDismiss={() => {
-          setSheetId(null);
-          setSelectedId(null);
-        }}
+        // Closing details goes back to the pin's callout.
+        onDismiss={() => setDetailsId(null)}
       />
 
       {revealed ? null : (
