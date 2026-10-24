@@ -1,0 +1,25 @@
+{
+  "name": "huddle",
+  "private": true,
+  "packageManager": "pnpm@10.31.0",
+  "engines": {
+    "node": "^24",
+    "pnpm": "^10"
+  },
+  "scripts": {
+    "mobile": "pnpm --filter mobile start",
+    "android": "pnpm --filter mobile android",
+    "web": "pnpm --filter web dev",
+    "format": "biome format",
+    "format:fix": "biome format --write",
+    "lint": "biome lint",
+    "lint:fix": "biome lint --write",
+    "check": "biome check",
+    "check:fix": "biome check --write",
+    "check-types": "pnpm -r check-types",
+    "preinstall": "npx only-allow pnpm"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "2.6.3"
+  }
+}

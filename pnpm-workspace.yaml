@@ -1,0 +1,7 @@
+packages:
+  - apps/*
+
+onlyBuiltDependencies:
+  - "@biomejs/biome"
+  - sharp
+  - unrs-resolver
