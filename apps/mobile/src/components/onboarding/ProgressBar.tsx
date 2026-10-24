@@ -30,7 +30,6 @@ export function ProgressBar({ step, total }: { step: number; total: number }) {
       accessibilityValue={{ min: 1, max: total, now: step + 1 }}
     >
       {Array.from({ length: total }, (_, i) => (
-        // biome-ignore lint/suspicious/noArrayIndexKey: fixed-length list of identical segments
         <Segment key={i} filled={i <= step} />
       ))}
     </View>
