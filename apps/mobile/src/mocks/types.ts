@@ -21,7 +21,7 @@ export type Trip = {
   id: string;
   title: string;
   destination: { city: string; region: string; lat: number; lng: number };
-  origin: { city: string; airport: string };
+  origin: { city: string; airport: string; lat: number; lng: number };
   dates: { start: string; end: string; label: string };
   budgetPerPerson: number;
   members: Member[];

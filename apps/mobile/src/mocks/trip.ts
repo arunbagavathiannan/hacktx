@@ -49,7 +49,7 @@ export const trip: Trip = {
   id: "denver-nov",
   title: "Denver weekend",
   destination: { city: "Denver", region: "Colorado", lat: 39.7392, lng: -104.9903 },
-  origin: { city: "Austin", airport: "AUS" },
+  origin: { city: "Austin", airport: "AUS", lat: 30.1975, lng: -97.6664 },
   dates: { start: "2026-11-13", end: "2026-11-15", label: "Fri Nov 13 – Sun Nov 15" },
   budgetPerPerson: 400,
   members,
