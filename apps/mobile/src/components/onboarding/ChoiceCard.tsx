@@ -1,6 +1,6 @@
 import type { Icon } from "phosphor-react-native";
-import { Text, View } from "react-native";
-import { Card, Heading, Muted } from "@/components/ui";
+import { Pressable, Text, View } from "react-native";
+import { Heading, Muted } from "@/components/ui";
 import { cn } from "@/lib/cn";
 import { colors, icon as iconStyle } from "@/theme";
 
@@ -13,15 +13,22 @@ type Props = {
   onPress: () => void;
 };
 
-// Single-select answer: a full-width card with a radio dot on the right.
+// Single-select answer: a full-width card with a radio dot on the right. Same look as the
+// ui Card, but the Pressable itself carries the radio role and checked state for TalkBack.
 export function ChoiceCard({ label, title, description, icon: IconCmp, selected, onPress }: Props) {
   return (
-    <Card selected={selected} onPress={onPress}>
-      <View
-        className="flex-row items-center gap-4"
-        accessibilityLabel={title ?? label}
-        accessibilityState={{ selected }}
-      >
+    <Pressable
+      accessibilityRole="radio"
+      accessibilityLabel={description ? `${title ?? label}. ${description}` : (title ?? label)}
+      accessibilityState={{ checked: selected, selected }}
+      aria-checked={selected}
+      onPress={onPress}
+      className={cn(
+        "rounded-card border p-4 active:opacity-80",
+        selected ? "border-accent bg-accent-soft" : "border-line bg-surface",
+      )}
+    >
+      <View className="flex-row items-center gap-4">
         <View className="w-11 items-center">
           {IconCmp ? (
             <IconCmp
@@ -51,6 +58,6 @@ export function ChoiceCard({ label, title, description, icon: IconCmp, selected,
           {selected ? <View className="h-2.5 w-2.5 rounded-full bg-accent" /> : null}
         </View>
       </View>
-    </Card>
+    </Pressable>
   );
 }

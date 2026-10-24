@@ -1,4 +1,4 @@
-import { CheckCircle, Info } from "phosphor-react-native";
+import { CheckCircle, Info, Sparkle } from "phosphor-react-native";
 import { View } from "react-native";
 import { Badge, Card, Chip, Heading, Muted } from "@/components/ui";
 import type { Clarification } from "@/mocks/types";
@@ -7,12 +7,19 @@ import { colors, icon } from "@/theme";
 type Props = {
   clarification: Clarification;
   answer?: string;
-  fromPreferences: boolean; // the current answer came from onboarding
+  fromPreferences: boolean; // the current answer was filled in from onboarding, not tapped
+  hint?: string | null; // onboarding is relevant but didn't answer it
   onAnswer: (option: string) => void;
 };
 
 // One quick question: tap a chip to answer. The reason says why the agent is asking.
-export function ClarificationCard({ clarification, answer, fromPreferences, onAnswer }: Props) {
+export function ClarificationCard({
+  clarification,
+  answer,
+  fromPreferences,
+  hint,
+  onAnswer,
+}: Props) {
   return (
     <Card>
       <View className="gap-3">
@@ -29,6 +36,17 @@ export function ClarificationCard({ clarification, answer, fromPreferences, onAn
           <Info size={16} color={colors.faint} weight={icon.weight} style={{ marginTop: 2 }} />
           <Muted className="flex-1">{clarification.reason}</Muted>
         </View>
+        {hint && !answer ? (
+          <View className="flex-row gap-2">
+            <Sparkle
+              size={16}
+              color={colors.accent}
+              weight={icon.weight}
+              style={{ marginTop: 2 }}
+            />
+            <Muted className="flex-1">{hint}</Muted>
+          </View>
+        ) : null}
         {fromPreferences ? <Badge label="Picked from your onboarding" tone="good" /> : null}
       </View>
     </Card>

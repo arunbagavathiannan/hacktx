@@ -1,48 +1,86 @@
 import { router, useLocalSearchParams } from "expo-router";
 import { MapTrifold, Sparkle } from "phosphor-react-native";
-import { useEffect, useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { View } from "react-native";
 import Animated, { FadeInDown } from "react-native-reanimated";
 import { ClarificationCard } from "@/components/summary/ClarificationCard";
-import { demoPrefs, inferAnswer, preferenceLines } from "@/components/summary/personalize";
+import {
+  demoPrefs,
+  inferAnswer,
+  preferenceHint,
+  preferenceLines,
+  tripContext,
+} from "@/components/summary/personalize";
 import { TripFacts } from "@/components/summary/TripFacts";
 import { Badge, Body, Button, Label, Muted, Screen, Title } from "@/components/ui";
-import { clarifications, trip } from "@/mocks";
+import { clarifications, flights, trip } from "@/mocks";
 import type { Preferences } from "@/mocks/types";
 import { usePlan } from "@/store/plan";
 import { usePreferences } from "@/store/preferences";
 import { colors, icon } from "@/theme";
 
 const appName = { whatsapp: "WhatsApp", instagram: "Instagram" } as const;
+const travel = tripContext(flights);
 
 const enter = (i: number) => FadeInDown.delay(i * 70).duration(320);
 
+// Clarification ids whose saved answer was filled in from onboarding (not tapped by the user).
+// Module-level so it lasts as long as the in-memory plan store, across visits to this screen.
+const autoFilled = new Set<string>();
+
 // What the agent understood from the chat, plus the one or two things it still needs.
 export default function Summary() {
-  // `?demo=prefs` shows the screen as if onboarding was filled in (PR screenshots).
-  const { demo } = useLocalSearchParams<{ demo?: string }>();
+  // MOCK: `?demo=prefs` renders with sample preferences (PR screenshots, demo rehearsal).
+  // Display-only: its answers live in local state and never reach usePlan.
+  const isDemo = useLocalSearchParams<{ demo?: string }>().demo === "prefs";
   const vibes = usePreferences((s) => s.vibes);
   const budget = usePreferences((s) => s.budget);
   const food = usePreferences((s) => s.food);
   const maxTravel = usePreferences((s) => s.maxTravel);
   const prefs: Preferences = useMemo(
-    () => (demo === "prefs" ? demoPrefs : { vibes, budget, food, maxTravel }),
-    [demo, vibes, budget, food, maxTravel],
+    () => (isDemo ? demoPrefs : { vibes, budget, food, maxTravel }),
+    [isDemo, vibes, budget, food, maxTravel],
   );
 
-  const answers = usePlan((s) => s.answers);
+  const storeAnswers = usePlan((s) => s.answers);
   const answer = usePlan((s) => s.answer);
+  const [demoAnswers, setDemoAnswers] = useState<Record<string, string>>({});
+  const saved = isDemo ? demoAnswers : storeAnswers;
 
-  // Pre-answer what onboarding already told us. Never overwrite a choice the user made.
+  const inferred = useMemo(
+    () => Object.fromEntries(clarifications.map((c) => [c.id, inferAnswer(c, prefs, travel)])),
+    [prefs],
+  );
+
+  // Computed during render (not after an effect) so the footer is right on the first frame.
+  const shown = (id: string) => saved[id] ?? inferred[id] ?? undefined;
+  const fromPreferences = (id: string) =>
+    inferred[id] != null &&
+    shown(id) === inferred[id] &&
+    (saved[id] === undefined || (!isDemo && autoFilled.has(id)));
+
+  // Real flow: save what onboarding answered so later screens see it. Never overwrite a choice.
   useEffect(() => {
+    if (isDemo) return;
     for (const c of clarifications) {
-      if (usePlan.getState().answers[c.id]) continue;
-      const inferred = inferAnswer(c, prefs);
-      if (inferred) answer(c.id, inferred);
+      const auto = inferred[c.id];
+      if (auto && usePlan.getState().answers[c.id] === undefined) {
+        autoFilled.add(c.id);
+        answer(c.id, auto);
+      }
     }
-  }, [prefs, answer]);
+  }, [isDemo, inferred, answer]);
 
-  const remaining = clarifications.filter((c) => !answers[c.id]).length;
+  const onAnswer = (id: string, option: string) => {
+    if (isDemo) {
+      setDemoAnswers((a) => ({ ...a, [id]: option }));
+      return;
+    }
+    autoFilled.delete(id);
+    answer(id, option);
+  };
+
+  const remaining = clarifications.filter((c) => !shown(c.id)).length;
   const lines = preferenceLines(prefs);
 
   return (
@@ -105,11 +143,10 @@ export default function Summary() {
               <ClarificationCard
                 key={c.id}
                 clarification={c}
-                answer={answers[c.id]}
-                fromPreferences={
-                  answers[c.id] !== undefined && answers[c.id] === inferAnswer(c, prefs)
-                }
-                onAnswer={(o) => answer(c.id, o)}
+                answer={shown(c.id)}
+                fromPreferences={fromPreferences(c.id)}
+                hint={preferenceHint(c, prefs)}
+                onAnswer={(o) => onAnswer(c.id, o)}
               />
             ))}
           </View>

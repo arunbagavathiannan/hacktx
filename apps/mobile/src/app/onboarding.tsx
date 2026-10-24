@@ -1,7 +1,7 @@
-import { router, useLocalSearchParams } from "expo-router";
+import { router, useFocusEffect, useLocalSearchParams } from "expo-router";
 import { ArrowLeft, ArrowRight, Check } from "phosphor-react-native";
-import { useState } from "react";
-import { Pressable, Text, View } from "react-native";
+import { useCallback, useState } from "react";
+import { BackHandler, Platform, Pressable, Text, View } from "react-native";
 import Animated, { FadeInLeft, FadeInRight } from "react-native-reanimated";
 import { ChoiceCard } from "@/components/onboarding/ChoiceCard";
 import {
@@ -52,6 +52,20 @@ export default function Onboarding() {
     setStep(to);
   };
 
+  // Android back steps to the previous question instead of leaving onboarding
+  // (we got here by redirect, so leaving would close the app). On question 1 it acts normally.
+  useFocusEffect(
+    useCallback(() => {
+      if (Platform.OS !== "android" || step === 0) return;
+      const sub = BackHandler.addEventListener("hardwareBackPress", () => {
+        setDirection(-1);
+        setStep(step - 1);
+        return true;
+      });
+      return () => sub.remove();
+    }, [step]),
+  );
+
   const { title, subtitle } = steps[step];
   const entering = (direction === 1 ? FadeInRight : FadeInLeft).duration(280);
 
@@ -72,9 +86,9 @@ export default function Onboarding() {
             label={step === last ? "Let's go" : "Next"}
             icon={
               step === last ? (
-                <Check size={20} color={colors.bg} weight="bold" />
+                <Check size={20} color={colors.bg} weight={icon.weight} />
               ) : (
-                <ArrowRight size={20} color={colors.bg} weight="bold" />
+                <ArrowRight size={20} color={colors.bg} weight={icon.weight} />
               )
             }
             disabled={!answered}
@@ -90,8 +104,8 @@ export default function Onboarding() {
           accessibilityRole="button"
           accessibilityLabel="Skip onboarding"
           onPress={finish}
-          hitSlop={12}
-          className="active:opacity-60"
+          hitSlop={8}
+          className="min-h-12 min-w-12 items-center justify-center active:opacity-60"
         >
           <Text className="font-body-semibold text-sm text-muted">Skip</Text>
         </Pressable>
