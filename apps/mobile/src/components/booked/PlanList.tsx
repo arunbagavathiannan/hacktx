@@ -1,4 +1,4 @@
-import { Link } from "expo-router";
+import { router } from "expo-router";
 import { MapPin } from "phosphor-react-native";
 import { Text, View } from "react-native";
 import { Body, Button, Card, Label, Muted } from "@/components/ui";
@@ -16,9 +16,14 @@ export function PlanList({ summary }: { summary: PlanSummary }) {
       <Card className="items-center gap-3 py-8">
         <MapPin size={28} color={colors.faint} weight={icon.weight} />
         <Body className="text-center text-muted">Nothing in the plan yet.</Body>
-        <Link href="/plan/map" asChild>
-          <Button label="Pick from the map" variant="secondary" className="h-11 self-stretch" />
-        </Link>
+        {/* Not <Link asChild>: Button calls onPress() without an event, and Link ignores
+            event-less presses on web, so the button did nothing there. */}
+        <Button
+          label="Pick from the map"
+          variant="secondary"
+          className="h-11 self-stretch"
+          onPress={() => router.push("/plan/map")}
+        />
       </Card>
     );
   }
@@ -53,7 +58,7 @@ export function PlanList({ summary }: { summary: PlanSummary }) {
 
 function Budget({ total, budget }: { total: number; budget: number }) {
   const fits = total <= budget;
-  const pct = Math.min(total / budget, 1) * 100;
+  const pct = budget > 0 ? Math.min(total / budget, 1) * 100 : 100;
   return (
     <View className="gap-3 border-t border-line px-4 pb-4 pt-3.5">
       <View className="flex-row items-end justify-between">

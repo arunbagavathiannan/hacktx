@@ -20,13 +20,17 @@ import { colors } from "@/theme";
 
 // Reanimated views ignore NativeWind className, so animated wrappers use inline styles.
 // Step 5: the plan is "booked" (mocked) and the user sends a share card back to the chat.
-// Dev: /plan/booked?demo=share opens scrolled to the share card (for PR screenshots).
+// Dev: /plan/booked?demo=share opens scrolled to the share card, ?demo=empty shows the
+// no-picks state (both for PR screenshots).
+const noPicks: string[] = [];
+
 export default function Booked() {
-  const picks = usePlan((s) => s.picks);
+  const { demo } = useLocalSearchParams<{ demo?: string }>();
+  const storePicks = usePlan((s) => s.picks);
+  const picks = demo === "empty" ? noPicks : storePicks;
   const summary = useMemo(() => summarize(picks), [picks]);
   const text = useMemo(() => shareText(summary), [summary]);
 
-  const { demo } = useLocalSearchParams<{ demo?: string }>();
   const scroll = useRef<ScrollViewInstance>(null);
   const shot = useRef<CardShotHandle>(null);
   const [cardY, setCardY] = useState<number | null>(null);
