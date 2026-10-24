@@ -1,0 +1,31 @@
+import { type Href, Link } from "expo-router";
+import { ArrowRight } from "phosphor-react-native";
+import { Body, Button, Label, Screen, Title } from "@/components/ui";
+import { colors } from "@/theme";
+
+type Props = {
+  step: string;
+  title: string;
+  description: string;
+  next?: { href: Href; label: string };
+};
+
+// Temporary stand-in for a screen that hasn't been built yet. Keeps the whole flow
+// clickable end to end. Delete it once every route has its real screen.
+export function Placeholder({ step, title, description, next }: Props) {
+  return (
+    <Screen
+      footer={
+        next ? (
+          <Link href={next.href} asChild>
+            <Button label={next.label} icon={<ArrowRight size={20} color={colors.bg} />} />
+          </Link>
+        ) : undefined
+      }
+    >
+      <Label className="pt-6">{step}</Label>
+      <Title>{title}</Title>
+      <Body className="text-muted">{description}</Body>
+    </Screen>
+  );
+}
