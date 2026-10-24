@@ -41,7 +41,10 @@
   "linter": {
     "enabled": true,
     "rules": {
-      "preset": "recommended"
+      "preset": "recommended",
+      "correctness": {
+        "noReactNativeRawText": "off"
+      }
     }
   },
   "assist": {
