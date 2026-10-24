@@ -35,6 +35,10 @@ function Row({
   );
 }
 
+function plural(n: number, word: string) {
+  return `${n} ${word}${n === 1 ? "" : "s"}`;
+}
+
 function itemRow(item: Item, trip: Trip) {
   if (item.kind === "flight") {
     const f = item.flight;
@@ -43,8 +47,19 @@ function itemRow(item: Item, trip: Trip) {
         key={item.id}
         kind="flight"
         title={`${f.airline} · ${trip.origin.airport} → ${trip.destination.city}`}
-        detail={`${f.depart} → ${f.arrive} · ${f.stops === 0 ? "Nonstop" : `${f.stops} stop`}`}
+        detail={`${f.depart} → ${f.arrive} · ${f.stops === 0 ? "Nonstop" : plural(f.stops, "stop")}`}
         price={`$${item.perPerson}`}
+      />
+    );
+  }
+  if (item.kind === "checkin") {
+    return (
+      <Row
+        key={item.id}
+        kind="hotel"
+        title={`Check in early · ${item.place.name}`}
+        detail="Extra night so you have a bed when you land. Included in the stay total."
+        price="incl."
       />
     );
   }
@@ -83,7 +98,15 @@ export function StayCard({ stays, trip }: { stays: Stay[]; trip: Trip }) {
             key={s.place.id}
             kind="hotel"
             title={s.place.name}
-            detail={`${s.nights} night${s.nights === 1 ? "" : "s"} · $${s.nightly}/night · split ${trip.members.length} ways`}
+            detail={[
+              plural(s.nights, "night"),
+              s.extraNights ? `incl. ${plural(s.extraNights, "early night")}` : null,
+              plural(s.rooms, "room"),
+              `$${s.nightly}/night`,
+              `split ${trip.members.length} ways`,
+            ]
+              .filter(Boolean)
+              .join(" · ")}
             price={`$${s.perPerson}`}
           />
         ))}

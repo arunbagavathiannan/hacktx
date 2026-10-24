@@ -5,19 +5,35 @@ import type { Flight, Place, PlaceCategory, Trip } from "@/mocks/types";
 
 const WEEKDAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"] as const;
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
-const DAY_RE = /\b(Sun|Mon|Tue|Wed|Thu|Fri|Sat)\b/;
+
+// A flight's departure starts with its weekday: "Fri 7:05 AM".
+const FLIGHT_TIME_RE = /^(Sun|Mon|Tue|Wed|Thu|Fri|Sat)\s+(\d{1,2}(?::\d{2})?)\s*(AM|PM)/i;
+// Only an explicit show/event time pins a place to a day: "Show Sun 7 PM". Opening hours like
+// "Closed Mon" or "Mon–Sat 10 AM–9 PM" say nothing about when the group goes.
+const EVENT_TIME_RE =
+  /^(?:Show|Event)\s+(Sun|Mon|Tue|Wed|Thu|Fri|Sat)\s+(\d{1,2}(?::\d{2})?)\s*(AM|PM)/i;
 
 // Rough per-person cost for Google Places price levels ("$$") that have no dollar amount.
 const PRICE_LEVEL: Record<number, number> = { 1: 15, 2: 30, 3: 60, 4: 100 };
 
-// Assumption: the group shares one room, so the hotel is split by everyone on the trip.
-const ROOMS = 1;
+// Assumption (pending Arun's call): the group shares one room, so the hotel is split by
+// everyone on the trip. The stay row shows it, so the assumption is never hidden.
+export const ROOMS = 1;
 
 export type Item =
   | { kind: "flight"; id: string; flight: Flight; perPerson: number }
-  | { kind: "place"; id: string; place: Place; perPerson: number; estimate: boolean };
+  | { kind: "place"; id: string; place: Place; perPerson: number; estimate: boolean }
+  // An extra hotel night before the trip starts (early flight). Its cost is in the stay.
+  | { kind: "checkin"; id: string; place: Place; perPerson: 0 };
 
-export type Stay = { place: Place; nights: number; nightly: number; perPerson: number };
+export type Stay = {
+  place: Place;
+  nights: number;
+  extraNights: number;
+  rooms: number;
+  nightly: number;
+  perPerson: number;
+};
 
 export type Day = { key: string; weekday: string; label: string; items: Item[] };
 
@@ -27,6 +43,8 @@ export type Itinerary = {
   nights: number;
   perPerson: number;
   fitsBudget: boolean;
+  // Picking two hotels or two flights counts only the latest one; these lines say so.
+  notes: string[];
   empty: boolean;
 };
 
@@ -46,15 +64,14 @@ function dayAt(start: Date, offset: number): TripDay {
   };
 }
 
-function tripDays(trip: Trip): TripDay[] {
-  const start = parseDate(trip.dates.start);
-  const nights = nightsOf(trip);
-  return Array.from({ length: nights + 1 }, (_, i) => dayAt(start, i));
-}
-
 function nightsOf(trip: Trip) {
   const ms = parseDate(trip.dates.end).getTime() - parseDate(trip.dates.start).getTime();
   return Math.max(0, Math.round(ms / 86_400_000));
+}
+
+function tripDays(trip: Trip): TripDay[] {
+  const start = parseDate(trip.dates.start);
+  return Array.from({ length: nightsOf(trip) + 1 }, (_, i) => dayAt(start, i));
 }
 
 // "Nov 13–15" (or "Nov 30 – Dec 2" across months).
@@ -79,26 +96,43 @@ function placeCost(place: Place) {
   return { perPerson: PRICE_LEVEL[level] ?? 0, estimate: true };
 }
 
-// Which trip day an item lands on: an explicit weekday in its time ("Fri 7:05 AM",
-// "Show Sun 7 PM") wins; otherwise nightlife goes on the first night and everything else
-// on the first full day.
-function dayFor(
-  text: string | undefined,
-  category: PlaceCategory | "flight",
-  days: TripDay[],
-  start: Date,
-) {
-  const named = text?.match(DAY_RE)?.[1];
-  if (named) {
-    const inTrip = days.find((d) => d.weekday === named);
-    if (inTrip) return inTrip;
-    // A day just outside the trip (e.g. a Thursday-night flight): the nearest matching day.
-    for (const offset of [-1, -2, -3, days.length, days.length + 1, days.length + 2]) {
-      const d = dayAt(start, offset);
-      if (d.weekday === named) return d;
-    }
+function compact(m: RegExpMatchArray) {
+  return `${m[1]} ${m[2]}${m[3].toLowerCase()}`;
+}
+
+// "Fri 7:05 AM" -> "Fri 7:05am". Null when it doesn't start with a weekday and time.
+export function shortTime(text: string | undefined) {
+  const m = text?.match(FLIGHT_TIME_RE);
+  return m ? compact(m) : null;
+}
+
+// A place's explicit show/event time, e.g. "Show Sun 7 PM" -> "Sun 7pm". Null otherwise.
+export function eventTime(place: Place) {
+  const m = place.hours?.match(EVENT_TIME_RE);
+  return m ? compact(m) : null;
+}
+
+// The day a flight leaves: its departure weekday, inside the trip or just around it
+// (e.g. a Thursday-night flight before a Friday start).
+function flightDay(flight: Flight, days: TripDay[], start: Date) {
+  const named = flight.depart.match(FLIGHT_TIME_RE)?.[1];
+  if (!named) return days[0];
+  const inTrip = days.find((d) => d.weekday === named);
+  if (inTrip) return inTrip;
+  for (const offset of [-1, -2, -3, days.length, days.length + 1, days.length + 2]) {
+    const d = dayAt(start, offset);
+    if (d.weekday === named) return d;
   }
-  if (category === "nightlife" || category === "flight") return days[0];
+  return days[0];
+}
+
+// The day a place goes on: its explicit show/event day if that's during the trip; otherwise
+// nightlife goes on the first night and everything else on the first full day.
+function placeDay(place: Place, days: TripDay[]) {
+  const named = place.hours?.match(EVENT_TIME_RE)?.[1];
+  const inTrip = named ? days.find((d) => d.weekday === named) : undefined;
+  if (inTrip) return inTrip;
+  if (place.category === "nightlife") return days[0];
   return days[Math.min(1, days.length - 1)];
 }
 
@@ -113,7 +147,7 @@ export function buildItinerary(
   const nights = nightsOf(trip);
   const people = Math.max(1, trip.members.length);
   const groups = new Map<number, Day>();
-  const stays: Stay[] = [];
+  const notes: string[] = [];
 
   const push = (day: TripDay, item: Item) => {
     let group = groups.get(day.offset);
@@ -124,34 +158,48 @@ export function buildItinerary(
     group.items.push(item);
   };
 
-  for (const id of picks) {
-    const flight = flights.find((f) => f.id === id);
-    if (flight) {
-      push(dayFor(flight.depart, "flight", days, start), {
-        kind: "flight",
-        id,
-        flight,
-        perPerson: flight.pricePerPerson,
-      });
-      continue;
+  // One flight and one hotel per trip: if several were picked, the latest pick counts.
+  const pickedFlights = picks.flatMap((id) => flights.filter((f) => f.id === id));
+  const pickedPlaces = picks.flatMap((id) => places.filter((p) => p.id === id));
+  const hotels = pickedPlaces.filter((p) => p.category === "hotel");
+  const flight: Flight | undefined = pickedFlights[pickedFlights.length - 1];
+  const hotel: Place | undefined = hotels[hotels.length - 1];
+  if (flight && pickedFlights.length > 1) {
+    notes.push(
+      `${pickedFlights.length} flights picked. Counting ${flight.airline}, your latest pick.`,
+    );
+  }
+  if (hotel && hotels.length > 1) {
+    notes.push(`${hotels.length} hotels picked. Counting ${hotel.name}, your latest pick.`);
+  }
+
+  // A flight that leaves before the trip starts needs a hotel night that early too.
+  let extraNights = 0;
+  if (flight) {
+    const day = flightDay(flight, days, start);
+    extraNights = Math.max(0, -day.offset);
+    push(day, { kind: "flight", id: flight.id, flight, perPerson: flight.pricePerPerson });
+    if (hotel && extraNights > 0) {
+      push(day, { kind: "checkin", id: `checkin-${hotel.id}`, place: hotel, perPerson: 0 });
     }
-    const place = places.find((p) => p.id === id);
-    if (!place) continue;
-    if (place.category === "hotel") {
-      const nightly = dollars(place.price) ?? 0;
-      stays.push({
-        place,
-        nights,
-        nightly,
-        perPerson: Math.round((nightly * nights * ROOMS) / people),
-      });
-      continue;
-    }
-    push(dayFor(place.hours, place.category, days, start), {
-      kind: "place",
-      id,
-      place,
-      ...placeCost(place),
+  }
+
+  for (const place of pickedPlaces) {
+    if (place.category === "hotel") continue;
+    push(placeDay(place, days), { kind: "place", id: place.id, place, ...placeCost(place) });
+  }
+
+  const stays: Stay[] = [];
+  if (hotel) {
+    const nightly = dollars(hotel.price) ?? 0;
+    const total = nights + extraNights;
+    stays.push({
+      place: hotel,
+      nights: total,
+      extraNights,
+      rooms: ROOMS,
+      nightly,
+      perPerson: Math.round((nightly * total * ROOMS) / people),
     });
   }
 
@@ -168,11 +216,19 @@ export function buildItinerary(
   return {
     days: sorted,
     stays,
-    nights,
+    nights: nights + extraNights,
     perPerson,
     fitsBudget: perPerson <= trip.budgetPerPerson,
+    notes,
     empty: sorted.length === 0 && stays.length === 0,
   };
+}
+
+// "Under $400" only when strictly under; exactly on it reads "on budget".
+export function budgetPhrase(it: Itinerary, trip: Trip) {
+  if (it.perPerson < trip.budgetPerPerson) return `under $${trip.budgetPerPerson}`;
+  if (it.perPerson === trip.budgetPerPerson) return "on budget";
+  return null;
 }
 
 // "The Crawford Hotel" -> "The Crawford", "Snooze, an A.M. Eatery" -> "Snooze".
@@ -181,14 +237,6 @@ export function shortName(name: string) {
     .split(",")[0]
     .replace(/\s+(Hotel|Amphitheatre|Amphitheater)$/i, "")
     .trim();
-}
-
-// "Show Sun 7 PM" -> "Sun 7pm", "Fri 7:05 AM" -> "Fri 7:05am". Null when there's no weekday.
-export function shortTime(text: string | undefined) {
-  if (!text) return null;
-  const m = text.match(/\b(Sun|Mon|Tue|Wed|Thu|Fri|Sat)\s+(\d{1,2}(?::\d{2})?)\s*(AM|PM)/i);
-  if (!m) return null;
-  return `${m[1]} ${m[2]}${m[3].toLowerCase()}`;
 }
 
 const EMOJI: Record<PlaceCategory, string> = {
@@ -203,7 +251,8 @@ const EMOJI: Record<PlaceCategory, string> = {
 export function summaryText(trip: Trip, it: Itinerary) {
   const parts: string[] = [];
   const items = it.days.flatMap((d) => d.items);
-  for (const item of items.filter((i) => i.kind === "flight")) {
+  for (const item of items) {
+    if (item.kind !== "flight") continue;
     parts.push(`✈️ ${item.flight.airline} ${shortTime(item.flight.depart) ?? item.flight.depart}`);
   }
   for (const stay of it.stays) parts.push(`🏨 ${shortName(stay.place.name)}`);
@@ -211,7 +260,7 @@ export function summaryText(trip: Trip, it: Itinerary) {
     if (item.kind !== "place") continue;
     const { place } = item;
     const emoji = place.hours?.startsWith("Show") ? "🎶" : EMOJI[place.category];
-    const when = shortTime(place.hours);
+    const when = eventTime(place);
     parts.push(`${emoji} ${shortName(place.name)}${when ? ` ${when}` : ""}`);
   }
   const head = `${trip.destination.city} ${shortDates(trip)}`;

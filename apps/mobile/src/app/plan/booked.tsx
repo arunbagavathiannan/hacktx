@@ -1,29 +1,42 @@
 import { router, useLocalSearchParams } from "expo-router";
-import { Copy, Info, MapTrifold, PaperPlaneTilt, SealCheck } from "phosphor-react-native";
+import { Info, MapTrifold, PaperPlaneTilt, SealCheck } from "phosphor-react-native";
 import { type ComponentRef, useMemo, useRef, useState } from "react";
-import { useWindowDimensions, View } from "react-native";
+import { Text, useWindowDimensions, View } from "react-native";
 import Animated, { ZoomIn } from "react-native-reanimated";
 import { Confetti } from "@/components/booked/Confetti";
 import { BudgetCard, DayCard, StayCard } from "@/components/booked/DayPlan";
 import { buildItinerary, summaryText } from "@/components/booked/itinerary";
 import { Reveal } from "@/components/booked/Reveal";
-import { CARD_HEIGHT, CARD_WIDTH, ShareCard } from "@/components/booked/ShareCard";
-import { type ShareResult, shareCard, shareText, textActionLabel } from "@/components/booked/share";
+import { FRAME_HEIGHT, FRAME_WIDTH, ShareCard } from "@/components/booked/ShareCard";
+import {
+  type ShareResult,
+  shareCard,
+  shareText,
+  textActionIcon,
+  textActionLabel,
+} from "@/components/booked/share";
 import { AvatarStack, Body, Button, Label, Muted, Screen, Title } from "@/components/ui";
 import { flights, places, trip } from "@/mocks";
 import { usePlan } from "@/store/plan";
 import { colors } from "@/theme";
 
+// Only say "Sent" when the platform confirms it (web share). Android's share sheet can't tell
+// us whether anything was sent, so it gets a neutral line.
 const STATUS: Record<ShareResult, string | null> = {
-  shared: "Sent. See you in Denver.",
+  shared: `Sent. See you in ${trip.destination.city}.`,
+  opened: `Share sheet opened. Pick ${trip.sourceChat.name} to send it.`,
+  textFallback: "Couldn't make the image, so the text summary opened instead.",
   copied: `Copied. Paste it in ${trip.sourceChat.name}.`,
   cancelled: null,
   failed: "Couldn't share from here. Try again.",
 };
 
 // Step 8 of the demo: the (mocked) booking confirmation plus a share card to send back to the
-// group chat. Screenshot-only states: ?demo=card (share card alone), ?demo=empty (no picks).
+// group chat.
 export default function Booked() {
+  // MOCK: demo-only screenshot states, ?demo=card (share card alone) and ?demo=empty (no
+  // picks). Not behind __DEV__ because PR screenshots come from the production web export.
+  // Nothing in the app links to them.
   const { demo } = useLocalSearchParams<{ demo?: string }>();
   const storePicks = usePlan((s) => s.picks);
   const picks = demo === "empty" ? [] : storePicks;
@@ -34,8 +47,8 @@ export default function Booked() {
   const [busy, setBusy] = useState(false);
   const [status, setStatus] = useState<string | null>(null);
   const { width } = useWindowDimensions();
-  // Shrink the preview on narrow phones; the capture still uses the card's own fixed size.
-  const scale = Math.min(1, (width - 40) / CARD_WIDTH);
+  // Shrink the preview on narrow phones; the capture still uses the frame's own fixed size.
+  const scale = Math.min(1, (width - 24) / FRAME_WIDTH);
 
   if (itinerary.empty) return <Empty />;
 
@@ -56,6 +69,8 @@ export default function Booked() {
       setBusy(false);
     }
   };
+
+  const TextIcon = textActionIcon;
 
   return (
     <Screen
@@ -79,6 +94,13 @@ export default function Booked() {
           <Muted className="text-center">
             {trip.dates.label} · {trip.members.length} of you
           </Muted>
+          {/* MOCK: booking is simulated (CLAUDE.md "Real vs. mocked"). Keep this easy to read. */}
+          <View className="mt-1 flex-row items-center gap-1.5 rounded-full border border-line bg-raised px-3 py-1.5">
+            <Info size={16} color={colors.muted} />
+            <Text className="font-body-semibold text-sm text-muted">
+              Demo booking: nothing was charged
+            </Text>
+          </View>
           <View className="pt-1">
             <AvatarStack members={trip.members} max={5} />
           </View>
@@ -87,15 +109,16 @@ export default function Booked() {
 
       <Reveal delay={300} className="gap-3">
         <BudgetCard itinerary={itinerary} trip={trip} />
-        {/* MOCK: booking is simulated (CLAUDE.md "Real vs. mocked"). */}
-        <View className="flex-row items-center justify-center gap-1.5">
-          <Info size={14} color={colors.faint} />
-          <Muted className="text-xs text-faint">Demo booking: nothing was charged</Muted>
-        </View>
       </Reveal>
 
       <Reveal delay={420} className="gap-3">
         <Label>Your weekend</Label>
+        {itinerary.notes.map((note) => (
+          <View key={note} className="flex-row items-start gap-2">
+            <Info size={16} color={colors.gold} />
+            <Muted className="flex-1">{note}</Muted>
+          </View>
+        ))}
         {itinerary.stays.length ? <StayCard stays={itinerary.stays} trip={trip} /> : null}
         {itinerary.days.map((day) => (
           <DayCard key={day.key} day={day} trip={trip} />
@@ -105,8 +128,11 @@ export default function Booked() {
       <Reveal delay={540} className="gap-3">
         <Label>Send it to {trip.sourceChat.name}</Label>
         <View
+          accessible
+          accessibilityRole="image"
+          accessibilityLabel={`Share card preview. ${text}`}
           className="self-center"
-          style={{ width: CARD_WIDTH * scale, height: CARD_HEIGHT * scale }}
+          style={{ width: FRAME_WIDTH * scale, height: FRAME_HEIGHT * scale }}
         >
           <View style={{ transform: [{ scale }], transformOrigin: "top left" }}>
             <ShareCard ref={card} trip={trip} itinerary={itinerary} />
@@ -121,11 +147,17 @@ export default function Booked() {
         <Button
           label={textActionLabel}
           variant="secondary"
-          icon={<Copy size={20} color={colors.ink} />}
+          icon={<TextIcon size={20} color={colors.ink} />}
           disabled={busy}
           onPress={() => run(() => shareText(text))}
         />
-        {status ? <Muted className="text-center">{status}</Muted> : null}
+        <Muted
+          accessibilityLiveRegion="polite"
+          accessibilityRole="text"
+          className="min-h-5 text-center"
+        >
+          {status ?? ""}
+        </Muted>
       </Reveal>
     </Screen>
   );
@@ -137,9 +169,10 @@ function Empty() {
       <View className="h-20 w-20 items-center justify-center rounded-full bg-raised">
         <MapTrifold size={36} color={colors.accent} />
       </View>
-      <Title className="text-center">Nothing to book yet</Title>
+      <Title className="text-center">Nothing in the plan yet</Title>
       <Body className="text-center text-muted">
-        Add a flight, a place to stay, and something to do from the map. Huddle books the plan here.
+        Pick a flight, a place to stay, and a few things to do on the map, and Huddle builds the
+        plan.
       </Body>
       <Button
         label="Back to the map"

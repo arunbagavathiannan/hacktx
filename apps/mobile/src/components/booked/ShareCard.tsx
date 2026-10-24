@@ -7,11 +7,22 @@ import { AvatarStack } from "@/components/ui";
 import type { PlaceCategory, Trip } from "@/mocks/types";
 import { colors } from "@/theme";
 import { kindIcons } from "./icons";
-import { type Itinerary, shortDates, shortName, shortTime } from "./itinerary";
+import {
+  budgetPhrase,
+  eventTime,
+  type Itinerary,
+  shortDates,
+  shortName,
+  shortTime,
+} from "./itinerary";
 
-// Fixed size, 4:5 like a portrait chat image. Captured at 1080x1350 (see share.ts).
-export const CARD_WIDTH = 336;
-export const CARD_HEIGHT = 420;
+// The card sits in a solid frame so the captured PNG has no transparent corners (chat apps
+// fill transparency with black, and the ticket notches need a background to read as cutouts).
+// Frame is 4:5 like a portrait chat image; captured at 1080x1350 (see share.ts).
+export const FRAME_WIDTH = 360;
+export const FRAME_HEIGHT = 450;
+const CARD_WIDTH = 336;
+const CARD_HEIGHT = 420;
 const SKY = 158;
 const MAX_ROWS = 4;
 
@@ -44,7 +55,7 @@ function rowsFor(it: Itinerary): Row[] {
       key: item.id,
       kind: item.place.category,
       title: shortName(item.place.name),
-      when: shortTime(item.place.hours) ?? weekday,
+      when: eventTime(item.place) ?? weekday,
     });
   }
   return rows;
@@ -94,78 +105,91 @@ export function ShareCard({ trip, itinerary, ref }: Props) {
   const all = rowsFor(itinerary);
   const rows = all.length > MAX_ROWS ? all.slice(0, MAX_ROWS - 1) : all;
   const more = all.length - rows.length;
+  const budget = budgetPhrase(itinerary, trip);
 
   return (
     <View
       ref={ref}
       collapsable={false}
-      style={{ width: CARD_WIDTH, height: CARD_HEIGHT }}
-      className="overflow-hidden rounded-[28px] bg-surface"
+      style={{
+        width: FRAME_WIDTH,
+        height: FRAME_HEIGHT,
+        backgroundColor: colors.bg,
+        alignItems: "center",
+        justifyContent: "center",
+      }}
     >
-      <View style={{ height: SKY }}>
-        <LinearGradient
-          colors={[colors.gold, colors.accent, colors["accent-soft"]]}
-          locations={[0, 0.6, 1]}
-          style={StyleSheet.absoluteFill}
-        />
-        <Horizon />
-        <View className="flex-row items-start justify-between px-6 pt-5">
-          <View className="gap-0.5">
-            <Text className="font-body-bold text-[11px] uppercase tracking-[2.5px] text-bg/70">
-              {trip.sourceChat.name} · {shortDates(trip)}
-            </Text>
-            <Text className="font-display text-[52px] leading-[56px] text-bg">
-              {trip.destination.city}
-            </Text>
-          </View>
-          <View className="mt-0.5 h-7 w-7 items-center justify-center rounded-full bg-bg/15">
-            <ChatsCircle size={16} color={colors.bg} weight="fill" />
-          </View>
-        </View>
-      </View>
-
-      <Perforation />
-
-      <View className="flex-1 gap-2 px-6 pt-1">
-        {rows.map((row) => {
-          const RowIcon = kindIcons[row.kind];
-          return (
-            <View key={row.key} className="h-7 flex-row items-center gap-3">
-              <View className="h-7 w-7 items-center justify-center rounded-full bg-accent-soft">
-                <RowIcon size={15} color={colors.accent} weight="regular" />
-              </View>
-              <Text numberOfLines={1} className="flex-1 font-body-bold text-[14px] text-ink">
-                {row.title}
+      <View
+        style={{ width: CARD_WIDTH, height: CARD_HEIGHT }}
+        className="overflow-hidden rounded-[28px] bg-surface"
+      >
+        <View style={{ height: SKY }}>
+          <LinearGradient
+            colors={[colors.gold, colors.accent, colors["accent-soft"]]}
+            locations={[0, 0.6, 1]}
+            style={StyleSheet.absoluteFill}
+          />
+          <Horizon />
+          <View className="flex-row items-start justify-between px-6 pt-5">
+            <View className="gap-0.5">
+              <Text className="font-body-bold text-[11px] uppercase tracking-[2.5px] text-bg/70">
+                {trip.sourceChat.name} · {shortDates(trip)}
               </Text>
-              <Text className="font-body-semibold text-xs text-muted">{row.when}</Text>
+              <Text className="font-display text-[52px] leading-[56px] text-bg">
+                {trip.destination.city}
+              </Text>
             </View>
-          );
-        })}
-        {more > 0 ? (
-          <Text className="pl-10 font-body-semibold text-xs text-faint">+{more} more</Text>
-        ) : null}
-      </View>
-
-      <View className="flex-row items-end justify-between border-t border-line px-6 pb-3 pt-3">
-        <View className="gap-1.5">
-          <AvatarStack members={trip.members} size="sm" max={5} />
-          <Text className="font-body-semibold text-xs text-muted">{trip.members.length} going</Text>
+            <View className="mt-0.5 h-7 w-7 items-center justify-center rounded-full bg-bg/15">
+              <ChatsCircle size={16} color={colors.bg} weight="fill" />
+            </View>
+          </View>
         </View>
-        <View className="items-end">
-          <Text className="font-display text-[30px] leading-[34px] text-ink">
-            ~${itinerary.perPerson}
-          </Text>
-          <Text className="font-body-semibold text-xs text-muted">
-            each{itinerary.fitsBudget ? ` · under $${trip.budgetPerPerson}` : ""}
+
+        <Perforation />
+
+        <View className="flex-1 gap-2 px-6 pt-1">
+          {rows.map((row) => {
+            const RowIcon = kindIcons[row.kind];
+            return (
+              <View key={row.key} className="h-7 flex-row items-center gap-3">
+                <View className="h-7 w-7 items-center justify-center rounded-full bg-accent-soft">
+                  <RowIcon size={15} color={colors.accent} weight="regular" />
+                </View>
+                <Text numberOfLines={1} className="flex-1 font-body-bold text-[14px] text-ink">
+                  {row.title}
+                </Text>
+                <Text className="font-body-semibold text-xs text-muted">{row.when}</Text>
+              </View>
+            );
+          })}
+          {more > 0 ? (
+            <Text className="pl-10 font-body-semibold text-xs text-faint">+{more} more</Text>
+          ) : null}
+        </View>
+
+        <View className="flex-row items-end justify-between border-t border-line px-6 pb-3 pt-3">
+          <View className="gap-1.5">
+            <AvatarStack members={trip.members} size="sm" max={5} />
+            <Text className="font-body-semibold text-xs text-muted">
+              {trip.members.length} going
+            </Text>
+          </View>
+          <View className="items-end">
+            <Text className="font-display text-[30px] leading-[34px] text-ink">
+              ~${itinerary.perPerson}
+            </Text>
+            <Text className="font-body-semibold text-xs text-muted">
+              each{budget ? ` · ${budget}` : ""}
+            </Text>
+          </View>
+        </View>
+
+        <View className="flex-row items-center justify-center gap-1.5 bg-raised py-2">
+          <ChatsCircle size={12} color={colors.accent} weight="fill" />
+          <Text className="font-body-bold text-[11px] tracking-wide text-muted">
+            Planned with Huddle
           </Text>
         </View>
-      </View>
-
-      <View className="flex-row items-center justify-center gap-1.5 bg-raised py-2">
-        <ChatsCircle size={12} color={colors.accent} weight="fill" />
-        <Text className="font-body-bold text-[11px] tracking-wide text-muted">
-          Planned with Huddle
-        </Text>
       </View>
     </View>
   );
