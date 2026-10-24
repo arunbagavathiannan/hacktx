@@ -143,6 +143,8 @@ in the app, use Reanimated.
 
 ## Pitch outputs
 
+- `pitch/notes.md`: talking points from mentor feedback (trust, what's next, judge Q&A).
+  `/pitch` and `/submit` must use it, especially the "why you can trust Huddle's agent" points.
 - `pitch/devpost.md`: Devpost write-up. Run `/submit`.
 - `pitch/script.md`: timed pitch script with demo cues and Q&A. Run `/pitch`.
 - `pitch/deck/`: short HTML slide deck built with the `claude-design` skill. Problem (plans die
