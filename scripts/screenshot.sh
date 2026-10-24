@@ -9,7 +9,8 @@ set -euo pipefail
 
 PLAYWRIGHT=playwright@1.64.0
 SERVE=serve@14.2.6
-PORT=4173
+# Random port by default so parallel runs (several agents at once) don't collide.
+PORT=${PORT:-$((4200 + RANDOM % 700))}
 
 if [ $# -lt 2 ]; then
   echo "usage: bash scripts/screenshot.sh <out-dir> <route> [route...]" >&2
@@ -27,7 +28,7 @@ mkdir -p "$out"
 pnpm --dir apps/mobile exec expo export --platform web --output-dir dist
 npx -y "$PLAYWRIGHT" install --with-deps chromium > /dev/null
 
-npx -y "$SERVE" -s apps/mobile/dist -l "$PORT" > /dev/null 2>&1 &
+npx -y "$SERVE" -s apps/mobile/dist -l "$PORT" --no-port-switching > /dev/null 2>&1 &
 server=$!
 trap 'kill "$server" 2> /dev/null || true' EXIT
 
@@ -39,8 +40,10 @@ done
 for route in "$@"; do
   name=$(printf '%s' "$route" | sed 's#^/##; s#/$##; s#/#-#g')
   name=${name:-home}
-  npx -y "$PLAYWRIGHT" screenshot --device "iPhone 14" --wait-for-timeout 2000 \
-    "http://localhost:$PORT$route" "$out/$name.png"
+  # Chromium at iPhone 14 size. (--device "iPhone 14" would switch to WebKit, which
+  # isn't installed, and every screenshot would fail.)
+  npx -y "$PLAYWRIGHT" screenshot --browser chromium --viewport-size "390,844" \
+    --wait-for-timeout 2000 "http://localhost:$PORT$route" "$out/$name.png"
 done
 
 ls -1 "$out"

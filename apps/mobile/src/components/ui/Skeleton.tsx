@@ -1,4 +1,5 @@
 import { useEffect } from "react";
+import { View } from "react-native";
 import Animated, {
   useAnimatedStyle,
   useSharedValue,
@@ -16,5 +17,11 @@ export function Skeleton({ className = "h-4 w-full" }: { className?: string }) {
   }, [opacity]);
 
   const style = useAnimatedStyle(() => ({ opacity: opacity.value }));
-  return <Animated.View className={cn("rounded-lg bg-raised", className)} style={style} />;
+  // NativeWind className is ignored on Reanimated views on web, so the classes go on an
+  // inner View and the Animated.View only animates opacity.
+  return (
+    <Animated.View style={style}>
+      <View className={cn("rounded-lg bg-raised", className)} />
+    </Animated.View>
+  );
 }

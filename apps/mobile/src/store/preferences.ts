@@ -1,4 +1,5 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import { useEffect, useState } from "react";
 import { create } from "zustand";
 import { createJSONStorage, persist } from "zustand/middleware";
 import type { Preferences } from "@/mocks/types";
@@ -25,3 +26,14 @@ export const usePreferences = create<State>()(
     { name: "huddle-preferences", storage: createJSONStorage(() => AsyncStorage) },
   ),
 );
+
+// True once saved preferences have loaded from storage. Check this before reading
+// `onboarded`, or a returning user gets sent back to onboarding on cold start.
+export function usePreferencesHydrated() {
+  const [hydrated, setHydrated] = useState(() => usePreferences.persist.hasHydrated());
+  useEffect(() => {
+    if (usePreferences.persist.hasHydrated()) setHydrated(true);
+    return usePreferences.persist.onFinishHydration(() => setHydrated(true));
+  }, []);
+  return hydrated;
+}

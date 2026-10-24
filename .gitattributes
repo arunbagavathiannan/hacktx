@@ -1,0 +1,11 @@
+# Always LF, even on Windows with core.autocrlf=true, so Biome's formatter check
+# passes locally the same way it does in CI.
+* text=auto eol=lf
+
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.webp binary
+*.ico binary
+*.ttf binary
