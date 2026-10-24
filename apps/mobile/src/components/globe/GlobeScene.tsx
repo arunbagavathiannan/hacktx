@@ -19,7 +19,7 @@ export type GlobeProps = {
 // a dark sphere, dotted land, a sunset rim glow, and an arc from origin to destination.
 
 const LAND_DOTS = 16000;
-const DOT_COLOR = new THREE.Color("#6B5E52");
+const DOT_COLOR = new THREE.Color("#8C7B6B");
 const HOT_COLOR = new THREE.Color(colors.accent);
 
 const earthShader = {
