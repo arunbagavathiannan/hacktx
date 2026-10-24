@@ -38,6 +38,17 @@ export interface ToolRun extends ToolResult {
   input: string;
 }
 
+// The timeline line for a tool call, before it runs ("Searching flights AUS → DEN").
+export function describeCall(name: string, rawArgs: string): string {
+  const tool = tools.find((t) => t.name === name);
+  if (!tool) return name;
+  try {
+    return tool.describe(rawArgs.trim() ? JSON.parse(rawArgs) : {});
+  } catch {
+    return name;
+  }
+}
+
 // Runs one tool call from the model. Never throws: bad args, tool errors and timeouts come
 // back as `ok: false` with a message the model can act on and the timeline can show.
 export async function runTool(name: string, rawArgs: string, ctx: ToolContext): Promise<ToolRun> {
