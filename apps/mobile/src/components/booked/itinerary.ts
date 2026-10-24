@@ -122,6 +122,8 @@ export function buildItinerary(
   trip: Trip,
   flights: Flight[],
   places: Place[],
+  // The group answered "Drive": flights don't count, gas (split per person) does.
+  drive?: { gasPerPerson: number },
 ): Itinerary {
   const start = parseDate(trip.dates.start);
   const days = tripDays(trip);
@@ -129,6 +131,10 @@ export function buildItinerary(
   const people = groupSize(trip);
   const groups = new Map<number, Day>();
   const notes: string[] = [];
+  const flightOptions = drive ? [] : flights;
+  if (drive) {
+    notes.push(`Driving: about $${drive.gasPerPerson} each in gas, split ${people} ways.`);
+  }
 
   const push = (day: TripDay, item: Item) => {
     let group = groups.get(day.offset);
@@ -140,7 +146,7 @@ export function buildItinerary(
   };
 
   // One flight and one hotel per trip: if several were picked, the latest pick counts.
-  const pickedFlights = picks.flatMap((id) => flights.filter((f) => f.id === id));
+  const pickedFlights = picks.flatMap((id) => flightOptions.filter((f) => f.id === id));
   const pickedPlaces = picks.flatMap((id) => places.filter((p) => p.id === id));
   const hotels = pickedPlaces.filter((p) => p.category === "hotel");
   const flight: Flight | undefined = pickedFlights[pickedFlights.length - 1];
@@ -200,7 +206,8 @@ export function buildItinerary(
 
   const perPerson =
     sorted.reduce((sum, d) => sum + d.items.reduce((s, i) => s + i.perPerson, 0), 0) +
-    stays.reduce((s, st) => s + st.perPerson, 0);
+    stays.reduce((s, st) => s + st.perPerson, 0) +
+    (drive?.gasPerPerson ?? 0);
 
   return {
     days: sorted,

@@ -1,64 +1,143 @@
 import { LinearGradient } from "expo-linear-gradient";
 import { router, useLocalSearchParams } from "expo-router";
 import { ArrowRight, CaretLeft } from "phosphor-react-native";
-import { useMemo, useState } from "react";
+import { type ComponentProps, type ComponentType, useEffect, useMemo, useState } from "react";
 import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import Animated, { FadeIn, useReducedMotion } from "react-native-reanimated";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { GlobeIntro } from "@/components/globe/GlobeIntro";
 import { categoryMeta, type Filter, filters } from "@/components/map/categories";
-import { estimatePerPerson, nightsBetween } from "@/components/map/estimate";
 import { FlightsRow } from "@/components/map/FlightsRow";
 import { MapCanvas } from "@/components/map/MapCanvas";
 import { PlaceSheet } from "@/components/map/PlaceSheet";
+import { DriveCard } from "@/components/route/DriveCard";
+import {
+  airportFor,
+  globeRoute,
+  type LegPlan,
+  planLegs,
+  travelPerPerson,
+} from "@/components/route/legs";
+import { RouteView } from "@/components/route/RouteView";
+import { type MapView, ViewToggle } from "@/components/route/ViewToggle";
 import { AvatarStack, Button, Chip, Heading, Muted } from "@/components/ui";
+import { estimatePerPerson, groupSize, nightsBetween } from "@/lib/pricing";
 import { flights, members, places, trip } from "@/mocks";
-import { usePlan } from "@/store/plan";
+import { multiFlights, multiTrip } from "@/mocks/multi";
+import { isDriving, usePlan } from "@/store/plan";
 import { colors } from "@/theme";
 
-// Austin–Bergstrom, where the arc on the globe starts. The trip mock only has the airport code.
-const ORIGIN = { lat: 30.1975, lng: -97.6664, airport: trip.origin.airport };
+// TODO(callout): the map-tiles PR adds onTogglePick / onOpenDetails / onDismiss to
+// MapCanvas. Until it merges, this cast lets us pass them (MapCanvas ignores them for now).
+// Once merged, delete this and use <MapCanvas> directly with the same three props.
+type CalloutProps = {
+  onTogglePick?: (id: string) => void;
+  onOpenDetails?: (id: string) => void;
+  onDismiss?: () => void;
+};
+const MapCanvasWithCallout = MapCanvas as ComponentType<
+  ComponentProps<typeof MapCanvas> & CalloutProps
+>;
 
 // Room on the map for the overlays: filter chips on top, the flights row at the bottom.
 const MAP_INSETS = { top: 96, right: 52, bottom: 132, left: 52 };
 
-const NIGHTS = nightsBetween(trip.dates.start, trip.dates.end);
+// Every flight id any trip on this screen knows, so flight picks never count as places.
+const ALL_FLIGHT_IDS = new Set([...flights, ...multiFlights].map((f) => f.id));
 
 // Step 7 of the demo: globe zooms into Denver, then the group picks options from the map.
-// Dev-only screenshot states: ?demo=globe (globe mid-zoom), ?demo=map (skip the intro),
-// ?demo=sheet (map with the Red Rocks sheet open).
+// MOCK: demo-only screenshot states, not linked from anywhere in the app:
+// ?demo=globe (globe mid-zoom), ?demo=map (skip the intro), ?demo=sheet (Red Rocks sheet
+// open), ?demo=route (Route tab), ?demo=multi (two-city route, mocks/multi.ts),
+// ?demo=drive (as if the group answered "Drive"; display-only, never saved to usePlan).
 export default function MapScreen() {
   const { demo } = useLocalSearchParams<{ demo?: string }>();
   const reduceMotion = useReducedMotion();
-  const skipIntro = demo === "map" || demo === "sheet" || reduceMotion;
+  const skipIntro =
+    reduceMotion || ["map", "sheet", "route", "multi", "drive"].includes(demo ?? "");
+
+  const isMulti = demo === "multi";
+  const activeTrip = isMulti ? multiTrip : trip;
+  const tripFlights = isMulti ? multiFlights : flights;
 
   const [introDone, setIntroDone] = useState(false);
   const revealed = skipIntro || introDone;
+  const [view, setView] = useState<MapView>(
+    demo === "route" || demo === "multi" ? "route" : "city",
+  );
   const [filter, setFilter] = useState<Filter>("all");
+  // selectedId highlights a pin (and, once merged, its callout); sheetId opens PlaceSheet.
   const [selectedId, setSelectedId] = useState<string | null>(demo === "sheet" ? "a1" : null);
+  const [sheetId, setSheetId] = useState<string | null>(demo === "sheet" ? "a1" : null);
 
   const picks = usePlan((s) => s.picks);
+  const answers = usePlan((s) => s.answers);
   const togglePick = usePlan((s) => s.togglePick);
+  const pickFlight = usePlan((s) => s.pickFlight);
+  const driving = demo === "drive" || isDriving(answers);
+
+  const legs = useMemo(
+    () => planLegs(activeTrip, tripFlights, picks, driving),
+    [activeTrip, tripFlights, picks, driving],
+  );
+  const firstLeg = legs[0];
+  const pickLegFlight = (leg: LegPlan, id: string) => pickFlight(id, leg.leg.flightIds);
+
+  // MOCK: demo-only. The two-city route starts with the group's favorite flight per leg.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: seed once when the demo opens
+  useEffect(() => {
+    if (!isMulti) return;
+    for (const leg of legs) {
+      const first = leg.options[0];
+      if (leg.mode === "fly" && !leg.picked && first) pickLegFlight(leg, first.id);
+    }
+  }, [isMulti]);
 
   const shownPlaces = useMemo(
     () => (filter === "all" ? places : places.filter((p) => p.category === filter)),
     [filter],
   );
-  const selected = places.find((p) => p.id === selectedId) ?? null;
-  const selectedPicked = selected ? picks.includes(selected.id) : false;
+  const sheetPlace = places.find((p) => p.id === sheetId) ?? null;
+  const sheetPicked = sheetPlace ? picks.includes(sheetPlace.id) : false;
   const you = members.find((m) => m.isYou);
-  const selectedPickers = selected
+  const sheetPickers = sheetPlace
     ? [
-        ...(selectedPicked && you ? [you] : []),
-        ...members.filter((m) => selected.pickedBy.includes(m.id)),
+        ...(sheetPicked && you ? [you] : []),
+        ...members.filter((m) => sheetPlace.pickedBy.includes(m.id)),
       ]
     : [];
 
-  const perPerson = estimatePerPerson(picks, places, flights, {
-    nights: NIGHTS,
-    people: trip.members.length,
-  });
-  const fitsBudget = perPerson <= trip.budgetPerPerson;
+  // Same math as the booked screen (lib/pricing), plus each leg's flight or gas.
+  const placePicks = picks.filter((id) => !ALL_FLIGHT_IDS.has(id));
+  const people = groupSize(activeTrip);
+  const perPerson =
+    estimatePerPerson(placePicks, {
+      places,
+      flights: [],
+      people,
+      nights: nightsBetween(activeTrip.dates.start, activeTrip.dates.end),
+    }) + travelPerPerson(legs);
+  const pickCount = placePicks.length + legs.filter((l) => l.picked).length;
+  const fitsBudget = perPerson <= activeTrip.budgetPerPerson;
+
+  // Only modes matter to the globe; leaving picks out keeps it from rebuilding on a pick.
+  const intro = useMemo(
+    () => globeRoute(activeTrip, planLegs(activeTrip, tripFlights, [], driving)),
+    [activeTrip, tripFlights, driving],
+  );
+  const introTitle =
+    activeTrip.stops.length === 1
+      ? `${activeTrip.stops[0]?.city}, ${activeTrip.stops[0]?.region}`
+      : activeTrip.stops.map((s) => s.city).join(" + ");
+  const routeCodes = [
+    activeTrip.origin.airport,
+    ...activeTrip.stops.map((s) => s.airport ?? s.city),
+  ].join(" → ");
+
+  const openSheet = (id: string) => {
+    setSelectedId(id);
+    setSheetId(id);
+  };
 
   return (
     <View className="flex-1 bg-bg">
@@ -74,97 +153,132 @@ export default function MapScreen() {
             <CaretLeft size={18} color={colors.ink} weight="regular" />
           </Pressable>
           <View className="flex-1">
-            <Heading className="text-lg leading-6">{trip.title}</Heading>
+            <Heading className="text-lg leading-6">{activeTrip.title}</Heading>
             <Muted className="text-xs leading-4">
-              {trip.dates.label} · {trip.members.length} friends
+              {activeTrip.dates.label} · {activeTrip.members.length} friends
             </Muted>
           </View>
-          <AvatarStack members={trip.members} size="sm" max={3} />
+          <AvatarStack members={activeTrip.members} size="sm" max={3} />
+        </View>
+
+        <View className="px-5 pb-3">
+          <ViewToggle value={view} onChange={setView} />
         </View>
 
         <View className="flex-1 overflow-hidden border-y border-line">
-          <MapCanvas
-            places={shownPlaces}
-            boundsFrom={places}
-            members={members}
-            pickedIds={picks}
-            selectedId={selectedId}
-            onSelect={setSelectedId}
-            insets={MAP_INSETS}
-            revealed={revealed}
-          />
-
-          <LinearGradient
-            colors={[colors.bg, "transparent"]}
-            style={[styles.fade, { top: 0 }]}
-            pointerEvents="none"
-          />
-          <ScrollView
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            className="absolute left-0 right-0 top-0"
-            contentContainerClassName="gap-2 px-5 pt-3"
-          >
-            {filters.map((f) => {
-              const meta = f.id === "all" ? null : categoryMeta[f.id];
-              const active = filter === f.id;
-              return (
-                <Chip
-                  key={f.id}
-                  label={f.label}
-                  selected={active}
-                  onPress={() => setFilter(f.id)}
-                  icon={
-                    meta ? (
-                      <meta.Icon
-                        size={14}
-                        color={active ? colors.accent : meta.color}
-                        weight={active ? "fill" : "regular"}
-                      />
-                    ) : null
-                  }
-                />
-              );
-            })}
-          </ScrollView>
-
-          <LinearGradient
-            colors={["transparent", colors.bg]}
-            style={[styles.fade, { bottom: 0, height: 150 }]}
-            pointerEvents="none"
-          />
-          {revealed ? (
-            <Animated.View
-              entering={FadeIn.delay(300)}
-              style={{ position: "absolute", bottom: 12, left: 0, right: 0 }}
-            >
-              <FlightsRow
-                flights={flights}
+          {view === "route" ? (
+            <RouteView
+              trip={activeTrip}
+              legs={legs}
+              members={members}
+              onPickFlight={pickLegFlight}
+            />
+          ) : (
+            <>
+              <MapCanvasWithCallout
+                places={shownPlaces}
+                boundsFrom={places}
                 members={members}
                 pickedIds={picks}
-                onToggle={togglePick}
-                route={`${trip.origin.airport} → DEN`}
+                selectedId={selectedId}
+                // TODO(callout): once the callout merges, a pin tap should only select
+                // (onSelect={setSelectedId}) and the callout's details button opens the sheet.
+                onSelect={openSheet}
+                insets={MAP_INSETS}
+                revealed={revealed}
+                onTogglePick={togglePick}
+                onOpenDetails={(id) => setSheetId(id)}
+                onDismiss={() => setSelectedId(null)}
               />
-            </Animated.View>
-          ) : null}
+
+              <LinearGradient
+                colors={[colors.bg, "transparent"]}
+                style={[styles.fade, { top: 0 }]}
+                pointerEvents="none"
+              />
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                className="absolute left-0 right-0 top-0"
+                contentContainerClassName="gap-2 px-5 pt-3"
+              >
+                {filters.map((f) => {
+                  const meta = f.id === "all" ? null : categoryMeta[f.id];
+                  const active = filter === f.id;
+                  return (
+                    <Chip
+                      key={f.id}
+                      label={f.label}
+                      selected={active}
+                      onPress={() => setFilter(f.id)}
+                      icon={
+                        meta ? (
+                          <meta.Icon
+                            size={14}
+                            color={active ? colors.accent : meta.color}
+                            weight={active ? "fill" : "regular"}
+                          />
+                        ) : null
+                      }
+                    />
+                  );
+                })}
+              </ScrollView>
+
+              <LinearGradient
+                colors={["transparent", colors.bg]}
+                style={[styles.fade, { bottom: 0, height: 150 }]}
+                pointerEvents="none"
+              />
+              {revealed && firstLeg ? (
+                <Animated.View
+                  entering={FadeIn.delay(300)}
+                  style={{ position: "absolute", bottom: 12, left: 0, right: 0 }}
+                >
+                  {firstLeg.mode === "drive" ? (
+                    <View className="px-5">
+                      <DriveCard
+                        from={firstLeg.leg.from}
+                        hours={firstLeg.leg.driveHours}
+                        miles={firstLeg.leg.driveMiles}
+                        perPerson={firstLeg.perPerson}
+                        people={people}
+                      />
+                    </View>
+                  ) : (
+                    <FlightsRow
+                      flights={firstLeg.options}
+                      members={members}
+                      pickedId={firstLeg.picked?.id ?? null}
+                      onPick={(id) => pickLegFlight(firstLeg, id)}
+                      route={`${airportFor(activeTrip, firstLeg.leg.from)} → ${airportFor(
+                        activeTrip,
+                        firstLeg.leg.to,
+                      )}`}
+                    />
+                  )}
+                </Animated.View>
+              ) : null}
+            </>
+          )}
         </View>
 
         <View className="gap-3 px-5 pb-2 pt-3">
           <View className="flex-row items-center justify-between">
             <View className="flex-row items-center gap-2 rounded-full bg-raised px-3.5 py-2">
               <Text className="font-body-bold text-sm text-ink">
-                {picks.length} {picks.length === 1 ? "pick" : "picks"} · ${perPerson}/person est.
+                {pickCount} {pickCount === 1 ? "pick" : "picks"} · ${perPerson}/person est.
               </Text>
             </View>
             <Text className={`font-body-semibold text-xs ${fitsBudget ? "text-good" : "text-bad"}`}>
               {fitsBudget
-                ? `Under the $${trip.budgetPerPerson} budget`
-                : `Over the $${trip.budgetPerPerson} budget`}
+                ? `Under the $${activeTrip.budgetPerPerson} budget`
+                : `Over the $${activeTrip.budgetPerPerson} budget`}
             </Text>
           </View>
           <Button
             label="Book the plan"
-            disabled={picks.length === 0}
+            disabled={pickCount === 0}
             icon={<ArrowRight size={20} color={colors.bg} weight="regular" />}
             onPress={() => router.push("/plan/booked")}
           />
@@ -172,19 +286,24 @@ export default function MapScreen() {
       </SafeAreaView>
 
       <PlaceSheet
-        place={selected}
-        picked={selectedPicked}
-        pickers={selectedPickers}
-        onToggle={() => selected && togglePick(selected.id)}
-        onDismiss={() => setSelectedId(null)}
+        place={sheetPlace}
+        picked={sheetPicked}
+        pickers={sheetPickers}
+        onToggle={() => sheetPlace && togglePick(sheetPlace.id)}
+        onDismiss={() => {
+          setSheetId(null);
+          setSelectedId(null);
+        }}
       />
 
       {revealed ? null : (
         <GlobeIntro
-          destination={trip.destination}
-          origin={ORIGIN}
-          eyebrow={`Huddle found ${places.length + flights.length} options`}
-          subtitle={`${trip.origin.airport} → ${trip.destination.city} · ${trip.dates.label}`}
+          title={introTitle || `${activeTrip.destination.city}, ${activeTrip.destination.region}`}
+          focus={intro.focus}
+          points={intro.points}
+          arcs={intro.arcs}
+          eyebrow={`Huddle found ${places.length + tripFlights.length} options`}
+          subtitle={`${routeCodes} · ${activeTrip.dates.label}`}
           frozenAt={demo === "globe" ? 0.55 : undefined}
           onDone={() => setIntroDone(true)}
         />

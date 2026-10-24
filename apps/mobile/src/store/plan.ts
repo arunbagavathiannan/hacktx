@@ -6,9 +6,28 @@ type State = {
   answers: Record<string, string>; // Clarification.id -> chosen option
   picks: string[]; // Place.id / Flight.id the user added to the plan
   answer: (clarificationId: string, option: string) => void;
+  // Places toggle on and off. Flights are radio: the group flies on the same plane, so
+  // picking one replaces any other flight in the plan.
   togglePick: (id: string) => void;
+  // Radio pick within one group of flight options (one leg of a multi-city route).
+  // Picking the flight that's already picked keeps it.
+  pickFlight: (id: string, among?: string[]) => void;
   reset: () => void;
 };
+
+const FLIGHT_IDS = flights.map((f) => f.id);
+
+// The "Fly or drive?" clarification (mocks/trip.ts, id "c1").
+export const TRAVEL_QUESTION_ID = "c1";
+
+// Only an explicit "Drive" hides flights; "Fly", "Either", or no answer keeps them.
+export function isDriving(answers: Record<string, string>) {
+  return answers[TRAVEL_QUESTION_ID] === "Drive";
+}
+
+function withFlight(picks: string[], id: string, among: string[]) {
+  return [...picks.filter((p) => p !== id && !among.includes(p)), id];
+}
 
 // Default plan, so it's never empty in the demo: the group's most-picked flight and
 // activity, plus the best hotel for this group size within budget (see bestHotel).
@@ -30,8 +49,10 @@ export const usePlan = create<State>()((set) => ({
   answer: (clarificationId, option) =>
     set((s) => ({ answers: { ...s.answers, [clarificationId]: option } })),
   togglePick: (id) =>
-    set((s) => ({
-      picks: s.picks.includes(id) ? s.picks.filter((p) => p !== id) : [...s.picks, id],
-    })),
+    set((s) => {
+      if (FLIGHT_IDS.includes(id)) return { picks: withFlight(s.picks, id, FLIGHT_IDS) };
+      return { picks: s.picks.includes(id) ? s.picks.filter((p) => p !== id) : [...s.picks, id] };
+    }),
+  pickFlight: (id, among = FLIGHT_IDS) => set((s) => ({ picks: withFlight(s.picks, id, among) })),
   reset: () => set({ answers: {}, picks: defaultPicks() }),
 }));
