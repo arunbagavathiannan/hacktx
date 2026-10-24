@@ -101,3 +101,23 @@ not for app or website code.
 - Don't add a dependency unless it clearly saves time on the demo path.
 - No tests except for whatever protects the demo path from breaking.
 - Don't edit `CLAUDE.md`, `.claude/`, `.mcp.json`, or `.github/`. Those changes go through Arun or Villy.
+
+## Every PR message includes an image
+
+Every PR description and PR comment you write must show the change visually, so the team can
+give specific feedback.
+
+- **UI changes:** screenshot each changed screen from the Expo web build at phone size:
+  ```
+  bash scripts/screenshot.sh pitch/media/pr/<branch-name> / /plan
+  ```
+  Commit the PNGs, then embed them with a link pinned to that commit, so they still load
+  after the branch is deleted:
+  `![plan screen](https://github.com/arunbagavathiannan/hacktx/blob/<commit-sha>/pitch/media/pr/<branch-name>/plan.png?raw=true)`
+- **States you can't reach by URL** (the planning popup, loading skeletons): add a dev-only way
+  to open them directly, e.g. a `?demo=popup` query param, then screenshot that route.
+- **No UI change** (backend, Edge Functions, config): include a small Mermaid diagram of what
+  changed (GitHub renders ```` ```mermaid ```` blocks), e.g. the request flow through the
+  new Edge Function.
+- If the screenshot script fails (e.g. `apps/mobile` doesn't exist yet), say so in the
+  message and include a diagram instead.
