@@ -39,6 +39,17 @@ jobs:
         with:
           fetch-depth: 1
 
+      # Node + pnpm so Claude can install deps and run scripts/screenshot.sh
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
       - name: Run Claude Code
         id: claude
         uses: anthropics/claude-code-action@v1
@@ -49,6 +60,7 @@ jobs:
           claude_args: |
             --model claude-opus-5-5
             --max-turns 30
+            --allowedTools "Bash(pnpm install:*),Bash(pnpm check:*),Bash(pnpm check-types:*),Bash(bash scripts/screenshot.sh:*)"
 
           # Claude may not change its own instructions, settings, MCP config, or anything in .github/.
           # The Bash rules are best-effort; CODEOWNERS + branch protection on main is the real guard.
