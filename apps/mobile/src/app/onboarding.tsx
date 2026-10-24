@@ -9,8 +9,8 @@ import {
   Storefront,
   Wallet,
 } from "phosphor-react-native";
-import { useState } from "react";
-import { Pressable, ScrollView, Text, View } from "react-native";
+import { type ComponentRef, useEffect, useRef, useState } from "react";
+import { BackHandler, Platform, Pressable, ScrollView, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { OptionRow } from "@/components/onboarding/OptionRow";
 import { ProgressSegments } from "@/components/onboarding/ProgressSegments";
@@ -88,6 +88,26 @@ function OnboardingSteps() {
     setStep(to);
   }
 
+  // Each step starts at the top, even if the last one was scrolled (small phones).
+  const scrollRef = useRef<ComponentRef<typeof ScrollView>>(null);
+  // biome-ignore lint/correctness/useExhaustiveDependencies: runs on every step change by design
+  useEffect(() => {
+    scrollRef.current?.scrollTo({ y: 0, animated: false });
+  }, [step]);
+
+  // Android back button steps back instead of leaving onboarding (it was opened with a
+  // Redirect, so leaving would close the app and lose the answers). No-op on web.
+  useEffect(() => {
+    if (Platform.OS !== "android") return;
+    const sub = BackHandler.addEventListener("hardwareBackPress", () => {
+      if (step === 0) return false;
+      setDirection(-1);
+      setStep(step - 1);
+      return true;
+    });
+    return () => sub.remove();
+  }, [step]);
+
   // Skip leaves this step blank (Huddle will ask in the plan if it matters) and moves on.
   function skip() {
     if (step === 0) setVibes([]);
@@ -123,7 +143,11 @@ function OnboardingSteps() {
         </Pressable>
       </View>
 
-      <ScrollView className="flex-1" contentContainerClassName="flex-grow px-5 pb-8 pt-6">
+      <ScrollView
+        ref={scrollRef}
+        className="flex-1"
+        contentContainerClassName="flex-grow px-5 pb-8 pt-6"
+      >
         <StepTransition stepKey={step} direction={direction}>
           {step === 0 ? (
             <>
