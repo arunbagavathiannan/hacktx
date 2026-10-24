@@ -23,7 +23,7 @@ jobs:
       (github.event_name == 'issue_comment' && contains(github.event.comment.body, '@claude')) ||
       (github.event_name == 'issues' && (contains(github.event.issue.body, '@claude') || contains(github.event.issue.title, '@claude')))
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 45
     # CLAUDE_CODE_OAUTH_TOKEN lives in this environment (deployment branches: main only),
     # not as a repo secret, so workflows pushed to other branches can't read it.
     environment: claude
@@ -57,7 +57,7 @@ jobs:
 
           claude_args: |
             --model claude-opus-5-5
-            --max-turns 30
+            --max-turns 60
             --allowedTools "Bash(pnpm install:*),Bash(pnpm check:*),Bash(pnpm check-types:*),Bash(bash scripts/screenshot.sh:*)"
 
           # Claude may not change its own instructions, settings, MCP config, or anything in .github/.
