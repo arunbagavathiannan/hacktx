@@ -113,6 +113,11 @@ body {
   transform: translateY(6px) scale(0.6);
 }
 
+/* Flipped near the right edge of the page: the tail moves to the bottom-right corner. */
+.globe-chat__bubble[data-side="left"] {
+  border-radius: 16px 16px 4px 16px;
+}
+
 .globe-chat__meta {
   font-size: 10px;
   letter-spacing: 0.02em;

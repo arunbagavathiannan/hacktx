@@ -78,7 +78,25 @@ function chatElement(chat: (typeof CHATS)[number]) {
   chip.textContent = chat.city;
 
   root.append(bubble, chip);
-  return root;
+  return { root, bubble };
+}
+
+const EDGE_GAP = 12;
+const TAIL = 10;
+
+// Bubbles grow right from their city by default. Near the right edge of the page they flip to
+// grow left, and if neither side fits they slide until they do, so they never clip.
+function placeBubble(bubble: HTMLElement, anchorX: number, viewportWidth: number) {
+  const width = bubble.offsetWidth;
+  const fitsRight = anchorX - TAIL + width <= viewportWidth - EDGE_GAP;
+  const fitsLeft = anchorX + TAIL - width >= EDGE_GAP;
+  const side = fitsRight || !fitsLeft ? "right" : "left";
+  let left = side === "right" ? anchorX - TAIL : anchorX + TAIL - width;
+  left = Math.min(left, viewportWidth - EDGE_GAP - width);
+  left = Math.max(left, EDGE_GAP);
+  bubble.dataset.side = side;
+  bubble.style.left = `${left - anchorX}px`;
+  bubble.style.transformOrigin = `${anchorX - left}px 100%`;
 }
 
 export function Globe() {
@@ -244,7 +262,7 @@ export function Globe() {
       pin.scale.setScalar(0);
       scene.add(pin);
 
-      const element = chatElement(chat);
+      const { root: element, bubble } = chatElement(chat);
       const label = new CSS2DObject(element);
       label.position.copy(normal.clone().multiplyScalar(1 + PIN_HEIGHT + 0.03));
       scene.add(label);
@@ -257,6 +275,7 @@ export function Globe() {
         ring,
         ringMaterial,
         element,
+        bubble,
         label,
         phase: "idle" as Phase,
         since: 0,
@@ -300,6 +319,7 @@ export function Globe() {
     let lastPinned: City | null = null;
     let lastSpawn = -Infinity;
     const cameraDir = new THREE.Vector3();
+    const projected = new THREE.Vector3();
     const facing = (city: City) => city.normal.dot(cameraDir);
 
     function setPhase(city: City, phase: Phase, now: number) {
@@ -324,7 +344,15 @@ export function Globe() {
       cameraDir.copy(camera.position).normalize();
       if (now - lastSpawn > SPAWN_MS) spawn(now);
 
+      let bounds: DOMRect | null = null;
       for (const city of cities) {
+        if (city.phase === "bubble") {
+          bounds ??= (container as HTMLDivElement).getBoundingClientRect();
+          projected.copy(city.label.position).project(camera);
+          const anchorX = bounds.left + ((projected.x + 1) / 2) * bounds.width;
+          placeBubble(city.bubble, anchorX, document.documentElement.clientWidth);
+        }
+
         const age = now - city.since;
         if (city.phase === "bubble" && age > BUBBLE_MS) {
           setPhase(city, "pin", now);
