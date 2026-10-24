@@ -91,9 +91,9 @@ hardcode the planning pipeline as fixed steps.
 
 | Tool | Does |
 |---|---|
-| `extract_trip` | Pulls who / where / when / budget / constraints out of the chat messages |
+| `extract_trip` | Pulls who / where / when / budget / constraints out of the chat messages, including the **group size** (number of people going) |
 | `search_flights` | SerpAPI Google Flights |
-| `search_hotels` | SerpAPI Google Hotels |
+| `search_hotels` | SerpAPI Google Hotels, searched for the group size. Rooms = ceil(group size ÷ room capacity); the planner picks the cheapest per-person option that keeps the whole plan in budget (`apps/mobile/src/lib/pricing.ts` mirrors this math) |
 | `search_places` | Google Places (food, activities) near the destination |
 | `pin_on_map` | Adds options to the plan's map (lat/lng, label, category) |
 | `create_poll` | Asks the group to choose between options |
