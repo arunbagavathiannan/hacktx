@@ -27,14 +27,36 @@ import {
   vibeOptions,
 } from "@/mocks/onboarding";
 import type { Preferences } from "@/mocks/types";
-import { usePreferences } from "@/store/preferences";
+import { usePreferences, usePreferencesHydrated } from "@/store/preferences";
 import { colors, icon } from "@/theme";
 
 const STEP_COUNT = 4;
 
+// Saved answers, minus any ids this version's option lists don't know about (otherwise
+// "1 picked" shows with nothing highlighted, and Next unlocks on an invisible answer).
+function savedAnswers() {
+  const s = usePreferences.getState();
+  const known = (opts: { id: string }[], id: string | null) =>
+    id !== null && opts.some((o) => o.id === id);
+  return {
+    vibes: s.vibes.filter((id) => known(vibeOptions, id)),
+    budget: known(budgetOptions, s.budget) ? s.budget : null,
+    food: s.food.filter((id) => id === LOCAL_SPOTS || known(foodOptions, id)),
+    maxTravel: known(travelOptions, s.maxTravel) ? s.maxTravel : null,
+  };
+}
+
 // Step 0: four quick taps so Huddle asks the group fewer questions later.
 // `?step=4` opens a given step directly (used for PR screenshots).
 export default function Onboarding() {
+  // Wait for AsyncStorage, so re-opening onboarding starts from the saved answers
+  // instead of blanks (and Finish can't overwrite them with blanks).
+  const hydrated = usePreferencesHydrated();
+  if (!hydrated) return <View className="flex-1 bg-bg" />;
+  return <OnboardingSteps />;
+}
+
+function OnboardingSteps() {
   const params = useLocalSearchParams<{ step?: string }>();
   const savePrefs = usePreferences((s) => s.set);
   const finishOnboarding = usePreferences((s) => s.finishOnboarding);
@@ -46,10 +68,11 @@ export default function Onboarding() {
   const [direction, setDirection] = useState<1 | -1>(1);
 
   // Start from anything already saved, so re-running onboarding keeps earlier answers.
-  const [vibes, setVibes] = useState(() => usePreferences.getState().vibes);
-  const [budget, setBudget] = useState(() => usePreferences.getState().budget);
-  const [food, setFood] = useState(() => usePreferences.getState().food);
-  const [maxTravel, setMaxTravel] = useState(() => usePreferences.getState().maxTravel);
+  const [initial] = useState(savedAnswers);
+  const [vibes, setVibes] = useState(initial.vibes);
+  const [budget, setBudget] = useState(initial.budget);
+  const [food, setFood] = useState(initial.food);
+  const [maxTravel, setMaxTravel] = useState(initial.maxTravel);
 
   const answered = [vibes.length > 0, budget !== null, food.length > 0, maxTravel !== null][step];
   const isLast = step === STEP_COUNT - 1;
