@@ -1,6 +1,6 @@
 # Huddle
 
-Take the plans out of the GC. HackTX '26.
+Take the plans out of the GC. HackTX '26. By Claude's Plan.
 
 | Path | What |
 |---|---|
