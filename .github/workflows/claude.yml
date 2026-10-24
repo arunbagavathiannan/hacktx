@@ -42,8 +42,6 @@ jobs:
       # Node + pnpm so Claude can install deps and run scripts/screenshot.sh
       - name: Setup pnpm
         uses: pnpm/action-setup@v4
-        with:
-          version: 10
 
       - name: Setup Node
         uses: actions/setup-node@v4
