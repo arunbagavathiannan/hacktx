@@ -1,15 +1,19 @@
-# HackTX '26 — "Take the plans out of the GC"
+# Huddle — "Take the plans out of the GC"
+
+HackTX '26 project. **Huddle** is the app's working name; use it in UI copy, the landing
+page, and pitch material.
 
 ## What we're building
 
-An Android app that notices when your WhatsApp group chats and Instagram DMs turn into plans
+Huddle is an Android app that notices when your WhatsApp group chats and Instagram DMs turn into plans
 ("we should go to Austin next month") and pops up asking if you want it planned. Tapping
 yes opens the app's planning screens, which walk the group through the plan — map, places,
 hotels, flights — with real results. Think [Boba](https://boba.app/), but it lives on your
 phone and reads the chats you already use instead of joining them as a bot.
 
 It reads chats **from the phone's notifications**, not through Meta's APIs (those don't
-expose personal chats). Muse Spark decides whether a message is a plan.
+expose personal chats). A Muse Spark **agent** does the planning: it decides what to look up,
+calls tools, and builds the plan step by step (see "Agent design").
 
 Tracks: **Meta** (Muse Spark) and **SerpAPI** (search results).
 
@@ -31,10 +35,12 @@ Demo runs on an **Android phone** (dev build, not Expo Go).
    (app, chat name, sender, text) and sends recent messages from that chat to Muse Spark.
 3. Muse Spark detects planning intent and extracts who / where / when / budget.
 4. A heads-up notification pops up: "Planning Austin with Sam? Plan it."
-5. Tapping it deep-links into the planning screens with the trip pre-filled.
-6. Planning screens show a Google Map plus **real** options from SerpAPI (hotels, flights)
-   and Google Places (restaurants, activities).
-7. The group votes on options; "Book" shows a confirmation screen.
+5. Tapping it deep-links into Huddle, where the agent is already working: the screen shows
+   its steps live ("Searching flights AUS → DEN…").
+6. The agent fills the planning screens: a Google Map plus **real** options from SerpAPI
+   (hotels, flights) and Google Places (restaurants, activities).
+7. The group votes on options; the agent tallies and proposes the final plan;
+   "Book" shows a confirmation screen.
 
 Privacy (judges will ask): only messages from apps the user turns on are read, filtering
 happens on the phone, and only chats that look like plans are sent to Muse Spark.
@@ -44,7 +50,7 @@ happens on the phone, and only chats that look like plans are sent to Muse Spark
 | Real | Mocked |
 |---|---|
 | Reading WhatsApp / Instagram messages from Android notifications | Actual booking and payment (confirmation screen only) |
-| Muse Spark detecting plans and extracting trip details | Login, accounts, friends list (hardcoded demo group) |
+| Muse Spark detecting plans and the agent's tool calls | Login, accounts, friends list (hardcoded demo group) |
 | Heads-up notification popup and deep link | Other group members' votes (seeded), unless realtime voting is reached |
 | Google Maps, SerpAPI hotels/flights, Google Places results | Daily brief, gamification, preferences (unless they're stretch goals we reached) |
 
@@ -56,6 +62,48 @@ Rules for mocks:
 - Mocks must look real on screen. No "lorem ipsum", no placeholder images.
 - In the pitch, say plainly what's simulated. Don't claim it uses Meta's messaging APIs; it reads notifications.
 
+## Agent design
+
+Huddle is agentic: Muse Spark runs a tool-calling loop and decides what to do next. Don't
+hardcode the planning pipeline as fixed steps.
+
+**Two stages**
+1. **Detector** (`supabase/functions/detect`): one cheap Muse Spark call per batch of new
+   messages. Returns `{ isPlan, confidence, summary }`. No tools. If `isPlan`, the app shows
+   the heads-up notification.
+2. **Planner agent** (`supabase/functions/agent`): starts when the user taps the notification.
+   Runs Muse Spark with tools (OpenAI-compatible function calling) until the plan is ready
+   or it needs the group's input.
+
+**Tools** (each one is a small, typed function in `supabase/functions/_shared/tools/`)
+
+| Tool | Does |
+|---|---|
+| `extract_trip` | Pulls who / where / when / budget / constraints out of the chat messages |
+| `search_flights` | SerpAPI Google Flights |
+| `search_hotels` | SerpAPI Google Hotels |
+| `search_places` | Google Places (food, activities) near the destination |
+| `pin_on_map` | Adds options to the plan's map (lat/lng, label, category) |
+| `create_poll` | Asks the group to choose between options |
+| `tally_votes` | Reads votes and picks the winner |
+| `ask_user` | Asks a clarifying question when the chat is missing something (dates, budget) |
+| `book` | **MOCK.** Produces a confirmation; never real booking or payment |
+
+**State and UI**
+- The plan lives in Supabase: `plans`, `plan_options`, `votes`, and `agent_steps`
+  (one row per tool call: tool, input summary, status, result summary).
+- The app subscribes to `agent_steps` with Supabase Realtime and shows them as a live
+  "Huddle is working" timeline. This is part of the demo's wow moment, so make it look good.
+
+**Guardrails**
+- Max 10 tool calls per run, short timeouts on every tool, and a friendly fallback if a tool fails.
+- The agent proposes; people decide. It never books, messages anyone, or sends anything
+  outside the app without the user tapping to confirm.
+- The agent never acts through the accessibility stretch feature (Google Play bans
+  accessibility-driven autonomous AI actions).
+- Confirm in Meta's docs that Muse Spark supports function calling and note the model ID
+  before building the loop.
+
 ## Stack
 
 pnpm monorepo:
@@ -65,7 +113,7 @@ pnpm monorepo:
 | `apps/mobile` | The app (the demo) | Expo + React Native, Expo Router, NativeWind (Tailwind), Reanimated, Phosphor icons, react-native-maps (Google Maps), expo-notifications |
 | `apps/mobile/modules/` | Android native code | Local Expo module (Kotlin) wrapping a `NotificationListenerService` |
 | `apps/web` | Landing / pitch site | Next.js, Tailwind, motion.dev, anime.js, three.js, Phosphor icons |
-| `supabase/` | Backend | Supabase (Postgres, Realtime for votes, Edge Functions for API calls) |
+| `supabase/` | Backend | Supabase (Postgres, Realtime for votes + agent steps, Edge Functions for the detector, agent, and tools) |
 
 - **Tooling:** Node 24 LTS, pnpm 10, TypeScript (type-check with `tsgo`), Biome for lint + format.
 - **AI:** Muse Spark via the Meta Model API (OpenAI-compatible). Confirm the exact model ID
