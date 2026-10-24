@@ -1,4 +1,4 @@
-import { ArrowDown, Lock, Play } from "@phosphor-icons/react/dist/ssr";
+import { ArrowDown, ArrowRight, Lock } from "@phosphor-icons/react/dist/ssr";
 import { Globe } from "./globe";
 
 export function Hero() {
@@ -14,11 +14,14 @@ export function Hero() {
           <a className="transition-colors hover:text-cream" href="#how-it-works">
             How it works
           </a>
-          <a className="transition-colors hover:text-cream" href="#privacy">
-            Privacy
+          <a className="transition-colors hover:text-cream" href="#trust">
+            Trust
           </a>
-          <a className="transition-colors hover:text-cream" href="#demo">
-            Demo
+          <a
+            className="rounded-full border border-cream/15 px-4 py-1.5 text-cream transition-colors hover:border-cream/40"
+            href="#waitlist"
+          >
+            Join the waitlist
           </a>
         </nav>
       </header>
@@ -53,11 +56,11 @@ export function Hero() {
               <ArrowDown size={16} weight="regular" />
             </a>
             <a
-              href="#demo"
+              href="#waitlist"
               className="inline-flex items-center gap-2 rounded-full border border-cream/15 px-6 py-3 text-sm font-semibold text-cream transition-colors hover:border-cream/40"
             >
-              <Play size={16} weight="fill" />
-              Watch the demo
+              Join the waitlist
+              <ArrowRight size={16} weight="regular" />
             </a>
           </div>
 

@@ -334,3 +334,31 @@ body {
     transition-duration: 1ms;
   }
 }
+
+/* Waitlist */
+
+.wl-glow {
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  background:
+    radial-gradient(36rem 20rem at 50% 115%, rgb(255 90 54 / 0.22), transparent 70%),
+    radial-gradient(24rem 14rem at 50% -10%, rgb(244 236 225 / 0.05), transparent 70%);
+}
+
+.wl-done {
+  animation: wl-done 600ms cubic-bezier(0.34, 1.56, 0.64, 1) both;
+}
+
+@keyframes wl-done {
+  from {
+    opacity: 0;
+    transform: scale(0.9);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .wl-done {
+    animation: none;
+  }
+}
