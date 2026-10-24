@@ -26,13 +26,10 @@ How Huddle earns trust (say this in the pitch, show it in the demo):
 
 ## What's next (for "what would you build next?")
 
-1. **Payments and real booking.** Stripe (check with MLH for sponsor offers), with
-   confirm-before-pay, spending limits, and automatic coupon/deal checks.
-2. **iOS.** iMessage/SMS through a Shortcuts automation.
-3. **More chat apps.** Messenger, Discord, and others through the same notification listener.
-4. **Web app.** Plan from a laptop, not just a phone (the landing page is the first step).
-5. **Memory.** Remembers the group's preferences and past trips.
-6. **Daily brief.** Reminds you of plans friends mentioned in past chats.
+Full list in [`NEXT_STEPS.md`](../NEXT_STEPS.md). In the pitch, lead with:
+1. **Payments** with confirm-before-pay, split costs, and automatic coupon checks.
+2. **Stronger privacy:** per-chat on/off, friends can opt out, on-device detection.
+3. **iOS and more chat apps.**
 
 ## Likely judge questions
 
