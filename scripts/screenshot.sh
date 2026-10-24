@@ -30,7 +30,16 @@ npx -y "$PLAYWRIGHT" install --with-deps chromium > /dev/null
 
 npx -y "$SERVE" -s apps/mobile/dist -l "$PORT" --no-port-switching > /dev/null 2>&1 &
 server=$!
-trap 'kill "$server" 2> /dev/null || true' EXIT
+# On Windows (Git Bash), `kill` only stops the npx wrapper and leaves the real server
+# running, so kill the whole Windows process tree instead.
+stop_server() {
+  if [ -r "/proc/$server/winpid" ]; then
+    taskkill //F //T //PID "$(cat "/proc/$server/winpid")" > /dev/null 2>&1 || true
+  else
+    kill "$server" 2> /dev/null || true
+  fi
+}
+trap stop_server EXIT
 
 for _ in $(seq 30); do
   curl -sf "http://localhost:$PORT" > /dev/null && break

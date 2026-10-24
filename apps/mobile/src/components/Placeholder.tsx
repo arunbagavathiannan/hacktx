@@ -1,4 +1,4 @@
-import { type Href, Link } from "expo-router";
+import { type Href, router } from "expo-router";
 import { ArrowRight } from "phosphor-react-native";
 import { Body, Button, Label, Screen, Title } from "@/components/ui";
 import { colors } from "@/theme";
@@ -17,9 +17,11 @@ export function Placeholder({ step, title, description, next }: Props) {
     <Screen
       footer={
         next ? (
-          <Link href={next.href} asChild>
-            <Button label={next.label} icon={<ArrowRight size={20} color={colors.bg} />} />
-          </Link>
+          <Button
+            label={next.label}
+            icon={<ArrowRight size={20} color={colors.bg} />}
+            onPress={() => router.push(next.href)}
+          />
         ) : undefined
       }
     >

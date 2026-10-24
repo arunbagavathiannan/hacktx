@@ -1,4 +1,4 @@
-import { Link, Redirect } from "expo-router";
+import { Redirect, router } from "expo-router";
 import { ChatsCircle, Sparkle } from "phosphor-react-native";
 import { View } from "react-native";
 import {
@@ -42,12 +42,11 @@ export default function Home() {
 
       <View className="gap-2 pt-2">
         <Label>Demo</Label>
-        <Link href="/plan/incoming" asChild>
-          <Button
-            label="Simulate a plan in the group chat"
-            icon={<Sparkle size={20} color={colors.bg} weight="fill" />}
-          />
-        </Link>
+        <Button
+          label="Simulate a plan in the group chat"
+          icon={<Sparkle size={20} color={colors.bg} weight="fill" />}
+          onPress={() => router.push("/plan/incoming")}
+        />
       </View>
     </Screen>
   );
