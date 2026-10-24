@@ -17,7 +17,12 @@ import { TimelineRow } from "@/components/timeline/TimelineRow";
 import { useTimelinePlayback } from "@/components/timeline/useTimelinePlayback";
 import { AvatarStack, Button, Label, Muted, Screen, Title } from "@/components/ui";
 import { trip } from "@/mocks";
-import { fallbackPreferencesDetail, type TimelineStep, timelineSteps } from "@/mocks/timeline";
+import {
+  fallbackPreferencesDetail,
+  type TimelineStep,
+  timelineOutcome,
+  timelineSteps,
+} from "@/mocks/timeline";
 import type { Preferences } from "@/mocks/types";
 import { usePreferences } from "@/store/preferences";
 import { colors } from "@/theme";
@@ -88,7 +93,9 @@ export default function Working() {
     >
       <View className="gap-3 pt-4">
         <StatusLabel finished={finished} />
-        <Title className="text-[28px] leading-8">Planning a weekend for ski bums</Title>
+        <Title className="text-[28px] leading-8">
+          Planning a weekend for {trip.sourceChat.name}
+        </Title>
         <View className="flex-row items-center gap-3">
           <AvatarStack members={trip.members} size="sm" max={5} />
           <Muted className="flex-1" numberOfLines={1}>
@@ -133,9 +140,9 @@ export default function Working() {
                 <CheckCircle size={26} color={colors.accent} weight="fill" />
                 <View className="flex-1 gap-0.5">
                   <Text className="font-body-bold text-[15px] text-ink">
-                    3 trips ready to compare
+                    {timelineOutcome.title}
                   </Text>
-                  <Muted>Denver, New Orleans and Nashville all fit $400 each.</Muted>
+                  <Muted>{timelineOutcome.body}</Muted>
                 </View>
               </View>
             </Animated.View>

@@ -89,3 +89,9 @@ export const timelineSteps: TimelineStep[] = [
     durationMs: 1600,
   },
 ];
+
+// Closing card once every step is done. Huddle still hasn't chosen: the group compares next.
+export const timelineOutcome = {
+  title: "3 trips ready to compare",
+  body: "Denver, New Orleans and Nashville all fit $400 each.",
+};
