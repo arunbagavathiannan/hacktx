@@ -39,7 +39,11 @@ export type Place = {
   lng: number;
   rating: number; // 0-5
   reviews: number;
-  price: string; // "$$" or "$189/night"
+  price: string; // display text: "$$" or "$189/night"
+  // Hotels only: structured numbers for pricing (src/lib/pricing.ts). Real data comes
+  // from SerpAPI Google Hotels.
+  nightlyRate?: number; // per room, per night
+  sleepsPerRoom?: number; // max guests per room
   address: string;
   hours?: string;
   blurb: string;

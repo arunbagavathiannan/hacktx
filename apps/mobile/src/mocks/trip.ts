@@ -76,7 +76,7 @@ export const agentSteps: AgentStep[] = [
     id: "s3",
     tool: "search_hotels",
     label: "Finding a place for 5",
-    detail: "8 hotels near Union Station · from $189/night",
+    detail: "2 rooms for 5 at Kimpton Hotel Born · $175 each",
     durationMs: 1800,
   },
   {
@@ -97,7 +97,7 @@ export const agentSteps: AgentStep[] = [
     id: "s6",
     tool: "verify",
     label: "Double-checking prices and dates",
-    detail: "All prices match sources · fits $400 budget",
+    detail: "Prices match sources · $382 each, under the $400 budget",
     durationMs: 1500,
   },
 ];
@@ -157,6 +157,8 @@ export const places: Place[] = [
     rating: 4.7,
     reviews: 1820,
     price: "$249/night",
+    nightlyRate: 249,
+    sleepsPerRoom: 2, // king rooms
     address: "1701 Wynkoop St",
     blurb: "Inside Union Station. Walk to food, the train to the airport out the door.",
     distanceLabel: "Union Station",
@@ -172,8 +174,10 @@ export const places: Place[] = [
     rating: 4.6,
     reviews: 2105,
     price: "$219/night",
+    nightlyRate: 219,
+    sleepsPerRoom: 4, // two queens
     address: "1600 Wewatta St",
-    blurb: "Big rooms, rooftop bar, two blocks from Union Station.",
+    blurb: "Two-queen rooms that sleep 4, rooftop bar, two blocks from Union Station.",
     distanceLabel: "2 min walk from Union Station",
     pickedBy: ["sam"],
     source: "serpapi_hotels",
