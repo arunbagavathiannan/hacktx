@@ -19,6 +19,7 @@ import { usePreferences } from "@/store/preferences";
 import { colors, icon } from "@/theme";
 
 const last = steps.length - 1;
+const stepKeys = steps.map((s) => s.key);
 
 // `?step=1..4` opens a given question directly (used for PR screenshots).
 function initialStep(param: string | undefined) {
@@ -84,7 +85,7 @@ export default function Onboarding() {
       }
     >
       <View className="flex-row items-center gap-4 pt-4">
-        <ProgressBar step={step} total={steps.length} />
+        <ProgressBar step={step} keys={stepKeys} />
         <Pressable
           accessibilityRole="button"
           accessibilityLabel="Skip onboarding"

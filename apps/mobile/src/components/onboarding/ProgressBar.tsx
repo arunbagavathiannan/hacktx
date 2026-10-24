@@ -22,15 +22,15 @@ function Segment({ filled }: { filled: boolean }) {
 }
 
 // One segment per question; segments up to the current step fill in.
-export function ProgressBar({ step, total }: { step: number; total: number }) {
+export function ProgressBar({ step, keys }: { step: number; keys: readonly string[] }) {
   return (
     <View
       className="flex-1 flex-row gap-1.5"
       accessibilityRole="progressbar"
-      accessibilityValue={{ min: 1, max: total, now: step + 1 }}
+      accessibilityValue={{ min: 1, max: keys.length, now: step + 1 }}
     >
-      {Array.from({ length: total }, (_, i) => (
-        <Segment key={i} filled={i <= step} />
+      {keys.map((key, i) => (
+        <Segment key={key} filled={i <= step} />
       ))}
     </View>
   );
