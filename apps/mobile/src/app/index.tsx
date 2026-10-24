@@ -1,13 +1,53 @@
-import { ChatsCircle } from "phosphor-react-native";
-import { Text, View } from "react-native";
+import { Redirect, router } from "expo-router";
+import { ChatsCircle, Sparkle } from "phosphor-react-native";
+import { View } from "react-native";
+import {
+  AvatarStack,
+  Badge,
+  Button,
+  Card,
+  Heading,
+  Label,
+  Muted,
+  Screen,
+  Title,
+} from "@/components/ui";
+import { trip } from "@/mocks";
+import { usePreferences, usePreferencesHydrated } from "@/store/preferences";
+import { colors } from "@/theme";
 
-// Placeholder home screen. The planning screens replace this.
+// Home: the user's plans. In the demo, the plan starts from the popup (/plan/incoming).
 export default function Home() {
+  const hydrated = usePreferencesHydrated();
+  const onboarded = usePreferences((s) => s.onboarded);
+  if (!hydrated) return <View className="flex-1 bg-bg" />;
+  if (!onboarded) return <Redirect href="/onboarding" />;
+
   return (
-    <View className="flex-1 items-center justify-center gap-4 bg-neutral-950 px-8">
-      <ChatsCircle size={56} color="#fafafa" weight="duotone" />
-      <Text className="text-4xl font-bold text-neutral-50">Huddle</Text>
-      <Text className="text-center text-base text-neutral-400">Take the plans out of the GC.</Text>
-    </View>
+    <Screen scroll>
+      <View className="flex-row items-center gap-2 pt-4">
+        <ChatsCircle size={28} color={colors.accent} weight="fill" />
+        <Title>Huddle</Title>
+      </View>
+      <Muted>Plans Huddle spotted in your chats.</Muted>
+
+      <Card>
+        <View className="gap-3">
+          <Badge label="Spotted in ski bums" tone="accent" />
+          <Heading>{trip.title}</Heading>
+          <Muted>{trip.dates.label}</Muted>
+          <AvatarStack members={trip.members} size="sm" />
+        </View>
+      </Card>
+
+      <View className="gap-2 pt-2">
+        <Label>Demo</Label>
+        <Button
+          label="Simulate a plan in the group chat"
+          icon={<Sparkle size={20} color={colors.bg} weight="fill" />}
+          onPress={() => router.push("/plan/incoming")}
+        />
+      </View>
+    </Screen>
   );
 }

@@ -28,8 +28,11 @@ Anything not on the demo path is mocked or skipped. When in doubt, ask
 
 ## The demo path (the one flow that must be real)
 
-Demo runs on an **Android phone** (dev build, not Expo Go).
+Demo runs on an **Android phone** (dev build, not Expo Go). The goal of every screen: save
+the group time so the plan actually happens.
 
+0. **Onboarding (once):** the user picks what they like (vibe, budget style, interests, food,
+   travel limits). Huddle uses this so it asks fewer questions later.
 1. A teammate sends a trip message to a real WhatsApp group or Instagram DM.
 2. Our Android notification listener reads the message from the notification
    (app, chat name, sender, text) and sends recent messages from that chat to Muse Spark.
@@ -37,10 +40,14 @@ Demo runs on an **Android phone** (dev build, not Expo Go).
 4. A heads-up notification pops up: "Planning Austin with Sam? Plan it."
 5. Tapping it deep-links into Huddle, where the agent is already working: the screen shows
    its steps live ("Searching flights AUS → DEN…").
-6. The agent fills the planning screens: a Google Map plus **real** options from SerpAPI
-   (hotels, flights) and Google Places (restaurants, activities).
-7. The group votes on options; the agent tallies and proposes the final plan;
-   "Book" shows a confirmation screen.
+6. **Trip summary + quick clarifications:** who / where / when / budget, plus at most one or
+   two quick questions the chat and onboarding didn't answer (tap-to-answer chips, not typing).
+7. **Map:** a three.js globe zooms into the destination, then a map with pins for the real
+   options from SerpAPI (hotels, flights) and Google Places (food, activities). Options are
+   chosen **from the map**: tap a pin to see what's there (photos, rating, price, hours,
+   distance) and add it to the plan. Friends' picks show on the pins.
+8. **Booked:** a confirmation screen (booking is mocked) plus a **share card**, an image and
+   short text summarizing the plan that the user sends back to the group chat.
 
 Privacy (judges will ask): only messages from apps the user turns on are read, filtering
 happens on the phone, and only chats that look like plans are sent to Muse Spark.
@@ -51,8 +58,8 @@ happens on the phone, and only chats that look like plans are sent to Muse Spark
 |---|---|
 | Reading WhatsApp / Instagram messages from Android notifications | Actual booking and payment (confirmation screen only) |
 | Muse Spark detecting plans and the agent's tool calls | Login, accounts, friends list (hardcoded demo group) |
-| Heads-up notification popup and deep link | Other group members' votes (seeded), unless realtime voting is reached |
-| Google Maps, SerpAPI hotels/flights, Google Places results | Daily brief, gamification, preferences (unless they're stretch goals we reached) |
+| Heads-up notification popup and deep link | Friends' picks on the map (seeded), unless realtime picks are reached |
+| Google Maps, SerpAPI hotels/flights, Google Places results | Daily brief, gamification (unless they're stretch goals we reached) |
 
 Known limits of notification reading (say so if asked): it only sees incoming messages that
 show a notification. It misses your own messages and chats that are open on screen.
@@ -84,9 +91,9 @@ hardcode the planning pipeline as fixed steps.
 
 | Tool | Does |
 |---|---|
-| `extract_trip` | Pulls who / where / when / budget / constraints out of the chat messages |
+| `extract_trip` | Pulls who / where / when / budget / constraints out of the chat messages, including the **group size** (number of people going) |
 | `search_flights` | SerpAPI Google Flights |
-| `search_hotels` | SerpAPI Google Hotels |
+| `search_hotels` | SerpAPI Google Hotels, searched for the group size. Rooms = ceil(group size ÷ room capacity); the planner picks the cheapest per-person option that keeps the whole plan in budget (`apps/mobile/src/lib/pricing.ts` mirrors this math) |
 | `search_places` | Google Places (food, activities) near the destination |
 | `pin_on_map` | Adds options to the plan's map (lat/lng, label, category) |
 | `create_poll` | Asks the group to choose between options |
@@ -135,7 +142,7 @@ pnpm monorepo:
 
 | Path | What | Tech |
 |---|---|---|
-| `apps/mobile` | The app (the demo) | Expo + React Native, Expo Router, NativeWind (Tailwind), Reanimated, Phosphor icons, react-native-maps (Google Maps), expo-notifications |
+| `apps/mobile` | The app (the demo) | Expo + React Native, Expo Router, NativeWind (Tailwind), Reanimated, Phosphor icons, react-native-maps (Google Maps), three.js via expo-gl + @react-three/fiber (globe zoom), expo-notifications, expo-sharing + react-native-view-shot (share card) |
 | `apps/mobile/modules/` | Android native code | Local Expo module (Kotlin) wrapping a `NotificationListenerService` |
 | `apps/web` | Landing / pitch site | Next.js, Tailwind, motion.dev, anime.js (scroll/step animations), three.js (3D hero), Phosphor icons. Layout reference: [AstroWind](https://github.com/arthelokyo/astrowind) (MIT, Astro); borrow its section structure, but build in Next.js |
 | `supabase/` | Backend | Supabase (Postgres, Realtime for votes + agent steps, Edge Functions for the detector, agent, and tools) |
@@ -154,8 +161,8 @@ pnpm monorepo:
   projector (e.g. scrcpy).
 - **CI** (every PR, like UTRP): `pnpm check` (Biome) and `pnpm check-types` (tsgo) must pass.
 
-Web-only libraries (motion.dev, anime.js, three.js) stay in `apps/web`. They don't run in React Native;
-in the app, use Reanimated.
+motion.dev and anime.js are web-only and stay in `apps/web`; in the app, use Reanimated. three.js runs in
+both: plain three.js on the web, and `@react-three/fiber` with `expo-gl` in the app (the globe zoom only).
 
 ## Visual standards
 
@@ -186,10 +193,9 @@ not for app or website code.
    WhatsApp/Instagram chat (including your own messages) and shows an overlay popup on top of it.
    Google Play restricts this for non-accessibility apps and Android 17 may block it, so it's
    sideload-only and must not be needed for the demo.
-2. Realtime voting across everyone's phones (Supabase Realtime) instead of seeded votes.
-3. Preferences screen: checkboxes for what you like, fed into the plan.
-4. Daily brief: reminders of things friends mentioned in past chats.
-5. Gamification.
+2. Realtime picks across everyone's phones (Supabase Realtime) instead of seeded friends' picks.
+3. Daily brief: reminders of things friends mentioned in past chats.
+4. Gamification.
 
 ## Roadmap (pitch only, don't build)
 
@@ -201,7 +207,11 @@ not for app or website code.
 ## Working rules for Claude
 
 - Keep changes small and focused on the current task. No refactors nobody asked for.
-- Don't add a dependency unless it clearly saves time on the demo path.
+- **Use existing libraries before writing your own.** If a maintained library already does it
+  (bottom sheets, map pins, sharing, image capture, animations, 3D), use it instead of
+  hand-rolling. Prefer Expo SDK packages (`npx expo install`) and libraries already in
+  `package.json`. Add a new one only when it clearly saves time on the demo path, and say why
+  in the PR.
 - No tests except for whatever protects the demo path from breaking.
 - Don't edit `CLAUDE.md`, `.claude/`, `.mcp.json`, or `.github/`. Those changes go through Arun or Villy.
 
