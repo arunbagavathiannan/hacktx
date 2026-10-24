@@ -1,0 +1,6 @@
+# Changes to these paths need @arunbagavathiannan's approval
+# (enforced once "Require review from Code Owners" is on for main).
+
+CLAUDE.md   @arunbagavathiannan
+/.claude/   @arunbagavathiannan
+/.github/   @arunbagavathiannan
