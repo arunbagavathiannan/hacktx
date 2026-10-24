@@ -1,5 +1,6 @@
 import * as Notifications from "expo-notifications";
-import { useEffect } from "react";
+import { useFocusEffect } from "expo-router";
+import { useCallback } from "react";
 import { Platform } from "react-native";
 
 const CHANNEL = "plans";
@@ -42,17 +43,21 @@ export async function showPlanNotification(title: string, body: string) {
 }
 
 // Tapping the system notification opens the agent timeline, same as "Plan it".
-// Pass a stable function (module-level), or the listener re-subscribes every render.
+// Only listens while this screen is focused: after "Plan it" pushes /plan/working, this
+// screen stays mounted underneath, and a later tap on the leftover notification would push
+// a second timeline. Pass a stable function (module-level) so it doesn't re-subscribe.
 export function usePlanNotificationTap(onTap: () => void) {
-  useEffect(() => {
-    if (Platform.OS === "web") return;
-    try {
-      const sub = Notifications.addNotificationResponseReceivedListener((response) => {
-        if (response.notification.request.content.data?.url === TAP_ROUTE) onTap();
-      });
-      return () => sub.remove();
-    } catch {
-      return;
-    }
-  }, [onTap]);
+  useFocusEffect(
+    useCallback(() => {
+      if (Platform.OS === "web") return;
+      try {
+        const sub = Notifications.addNotificationResponseReceivedListener((response) => {
+          if (response.notification.request.content.data?.url === TAP_ROUTE) onTap();
+        });
+        return () => sub.remove();
+      } catch {
+        return;
+      }
+    }, [onTap]),
+  );
 }
