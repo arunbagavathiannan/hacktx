@@ -38,7 +38,8 @@ for _ in $(seq 30); do
 done
 
 for route in "$@"; do
-  name=$(printf '%s' "$route" | sed 's#^/##; s#/$##; s#/#-#g')
+  # /plan/map?demo=sheet -> plan-map-demo-sheet (no ? = & in Windows file names)
+  name=$(printf '%s' "$route" | sed 's#^/##; s#/$##; s#[/?=&]#-#g')
   name=${name:-home}
   # Chromium at iPhone 14 size. (--device "iPhone 14" would switch to WebKit, which
   # isn't installed, and every screenshot would fail.)
