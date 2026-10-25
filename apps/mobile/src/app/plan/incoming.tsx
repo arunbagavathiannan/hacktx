@@ -11,7 +11,7 @@ import {
   Text,
   View,
 } from "react-native";
-import Animated, { FadeIn, useReducedMotion } from "react-native-reanimated";
+import Animated, { useReducedMotion } from "react-native-reanimated";
 import { ChatBubble } from "@/components/incoming/ChatBubble";
 import { PlanBanner } from "@/components/incoming/PlanBanner";
 import { TypingIndicator } from "@/components/incoming/TypingIndicator";
@@ -19,6 +19,7 @@ import { AvatarStack, Screen } from "@/components/ui";
 import { brief, chat, members, triggerMessageId } from "@/mocks";
 import type { Member } from "@/mocks/types";
 import { colors } from "@/theme";
+import { fadeIn } from "@/theme/motion";
 
 const FIRST_MESSAGE_MS = 600;
 const MESSAGE_GAP_MS = 700;
@@ -150,7 +151,7 @@ export default function Incoming() {
           {typing ? <TypingIndicator key={typing.id} member={memberFor(typing.from)} /> : null}
 
           {banner === "dismissed" ? (
-            <Animated.View entering={FadeIn.duration(250)} style={{ alignItems: "center" }}>
+            <Animated.View entering={fadeIn()} style={{ alignItems: "center" }}>
               <Pressable
                 accessibilityRole="button"
                 accessibilityLabel="Huddle spotted a plan. Review it."

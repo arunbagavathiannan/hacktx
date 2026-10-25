@@ -2,8 +2,7 @@ import { Redirect, router, useLocalSearchParams } from "expo-router";
 import { Info, MapTrifold, PaperPlaneTilt, SealCheck } from "phosphor-react-native";
 import { type ComponentRef, useMemo, useRef, useState } from "react";
 import { Text, useWindowDimensions, View } from "react-native";
-import Animated, { ZoomIn } from "react-native-reanimated";
-import { Confetti } from "@/components/booked/Confetti";
+import Animated from "react-native-reanimated";
 import { BudgetCard, DayCard, StayCard } from "@/components/booked/DayPlan";
 import { buildItinerary, summaryText } from "@/components/booked/itinerary";
 import { Reveal } from "@/components/booked/Reveal";
@@ -20,6 +19,7 @@ import { AvatarStack, Body, Button, Label, Muted, Screen, Title } from "@/compon
 import type { Trip } from "@/mocks/types";
 import { isDriving, useDestination, usePlan } from "@/store/plan";
 import { colors } from "@/theme";
+import { fadeIn, stagger } from "@/theme/motion";
 
 // Only say "Sent" when the platform confirms it (web share). Android's share sheet can't tell
 // us whether anything was sent, so it gets a neutral line.
@@ -98,14 +98,13 @@ function Booked() {
     >
       <View className="items-center gap-4 pt-6">
         <View className="h-24 w-24 items-center justify-center">
-          <Confetti />
-          <Animated.View entering={ZoomIn.duration(300)}>
+          <Animated.View entering={fadeIn()}>
             <View className="h-20 w-20 items-center justify-center rounded-full border border-accent/40 bg-accent-soft">
               <SealCheck size={44} color={colors.accent} weight="fill" />
             </View>
           </Animated.View>
         </View>
-        <Reveal delay={150} className="items-center gap-2">
+        <Reveal delay={stagger(1)} className="items-center gap-2">
           <Label>Booked</Label>
           <Title className="text-center text-4xl leading-[44px]">
             You're going to {trip.destination.city}
@@ -126,11 +125,11 @@ function Booked() {
         </Reveal>
       </View>
 
-      <Reveal delay={300} className="gap-3">
+      <Reveal delay={stagger(2)} className="gap-3">
         <BudgetCard itinerary={itinerary} trip={trip} />
       </Reveal>
 
-      <Reveal delay={420} className="gap-3">
+      <Reveal delay={stagger(3)} className="gap-3">
         <Label>Your weekend</Label>
         {itinerary.notes.map((note) => (
           <View key={note} className="flex-row items-start gap-2">
@@ -144,7 +143,7 @@ function Booked() {
         ))}
       </Reveal>
 
-      <Reveal delay={540} className="gap-3">
+      <Reveal delay={stagger(4)} className="gap-3">
         <Label>Send it to {trip.sourceChat.name}</Label>
         <View
           accessible

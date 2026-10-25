@@ -1,10 +1,10 @@
 import { CaretRight, Sparkle, UsersThree } from "phosphor-react-native";
 import { Pressable, View } from "react-native";
 import { AvatarStack, Badge, Heading, Muted } from "@/components/ui";
-import { tripPerPerson } from "@/lib/pricing";
+
 import { brief } from "@/mocks";
 import { destinationById, destinationSuggestions } from "@/mocks/destinations";
-import { usePlan } from "@/store/plan";
+import { planPerPerson, useDriving, usePlan } from "@/store/plan";
 import { colors, icon } from "@/theme";
 
 const appName = { whatsapp: "WhatsApp", instagram: "Instagram" } as const;
@@ -18,7 +18,8 @@ export function PlanCard({ onPress }: { onPress: () => void }) {
   const picked = destinationId ? destinationById(destinationId) : null;
   const trip = picked?.trip ?? brief;
   const people = Math.max(1, brief.members.length);
-  const perPerson = picked ? tripPerPerson(picks, picked) : 0;
+  const driving = useDriving();
+  const perPerson = picked ? planPerPerson(picked, picks, driving) : 0;
   const status = [
     `Spotted in ${trip.sourceChat.name}`,
     `${people} ${people === 1 ? "person" : "people"}`,

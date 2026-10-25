@@ -88,17 +88,3 @@ export function estimatePerPerson(
     others.reduce((sum, p) => sum + placePerPerson(p).amount, 0);
   return Math.round(total);
 }
-
-// estimatePerPerson for a one-city trip, with group size and nights taken from the trip.
-// Same numbers as the map footer and the booked screen for the same picks.
-export function tripPerPerson(
-  picks: string[],
-  data: { trip: Trip; places: Place[]; flights: Flight[] },
-) {
-  return estimatePerPerson(picks, {
-    places: data.places,
-    flights: data.flights,
-    people: groupSize(data.trip),
-    nights: nightsBetween(data.trip.dates.start, data.trip.dates.end),
-  });
-}

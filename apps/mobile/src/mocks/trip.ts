@@ -27,7 +27,7 @@ export const chat: ChatMessage[] = [
     app: "whatsapp",
     chat: "ski bums",
     from: "maya",
-    text: "we NEED a trip before finals",
+    text: "we NEED a trip before finals. weekend of nov 13?",
     at: "2026-10-24T19:02:00-05:00",
   },
   {
@@ -126,7 +126,7 @@ export const agentSteps: AgentStep[] = [
     id: "s3",
     tool: "suggest_destinations",
     label: "Finding where to go",
-    detail: "3 ideas from the chat: Denver, New Orleans, Nashville",
+    detail: "3 ideas that fit everyone: Denver, New Orleans, Nashville",
     durationMs: 1800,
   },
   {

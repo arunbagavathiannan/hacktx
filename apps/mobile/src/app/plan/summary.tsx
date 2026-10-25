@@ -2,7 +2,7 @@ import { router, useLocalSearchParams } from "expo-router";
 import { ArrowRight, Sparkle } from "phosphor-react-native";
 import { useEffect, useMemo, useState } from "react";
 import { View } from "react-native";
-import Animated, { FadeInDown } from "react-native-reanimated";
+import Animated from "react-native-reanimated";
 import { prefetchMapTiles } from "@/components/map/MapCanvas";
 import { ClarificationCard } from "@/components/summary/ClarificationCard";
 import { DestinationTeaser } from "@/components/summary/DestinationTeaser";
@@ -18,16 +18,16 @@ import { Badge, Body, Button, Label, Muted, Screen, Title } from "@/components/u
 import { brief, clarifications } from "@/mocks";
 import { destinationSuggestions } from "@/mocks/destinations";
 import type { Preferences } from "@/mocks/types";
-import { destinationEstimates, usePlan } from "@/store/plan";
+import { destinationEstimates, TRAVEL_QUESTION_ID, usePlan } from "@/store/plan";
 import { usePreferences } from "@/store/preferences";
 import { colors, icon } from "@/theme";
+import { fadeIn, stagger } from "@/theme/motion";
 
 const appName = { whatsapp: "WhatsApp", instagram: "Instagram" } as const;
 // Every idea's flights, so "Short flight (<3h)" can answer fly-or-drive before the pick.
 const travel = tripContext(destinationSuggestions.flatMap((d) => d.flights));
-const ideas = destinationEstimates();
 
-const enter = (i: number) => FadeInDown.delay(i * 70).duration(320);
+const enter = (i: number) => fadeIn(stagger(i));
 
 // Clarification ids whose saved answer was filled in from onboarding (not tapped by the user).
 // Module-level so it lasts as long as the in-memory plan store, across visits to this screen.
@@ -114,6 +114,9 @@ export default function Summary() {
     : (destinationSuggestions.find((d) => d.id === destinationId) ?? null);
 
   const remaining = clarifications.filter((c) => !shown(c.id)).length;
+  // Estimates follow the fly-or-drive answer shown above (flights, or split gas).
+  const driving = shown(TRAVEL_QUESTION_ID) === "Drive";
+  const ideas = useMemo(() => destinationEstimates(driving), [driving]);
   const lines = preferenceLines(prefs);
   const blocker =
     remaining > 0

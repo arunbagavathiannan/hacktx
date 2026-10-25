@@ -286,16 +286,16 @@ The **perforation** (a dashed hairline with 20px circular notches cut from both 
 - Unboxed. Rows have 12px vertical padding, 1px `line` dividers, title in body-strong, detail in small `muted`, and a right-aligned price in tabular numbers. Leading icons are optional, bare, 18px, `muted`.
 
 ### Heads-up banner
-- `raised`, 28px radius, floats `insets.top + 8` from the top, springs in from above (damping 16, stiffness 140), slides out up in 220ms. App glyph in a 24px `accent` rounded square, "Huddle · now", title in Display-face 18px, one body line, two 48dp buttons (Not now / Plan it).
+- `raised`, 28px radius, floats `insets.top + 8` from the top, slides down from above (220ms ease-out, no overshoot), slides out up in 220ms. App glyph in a 24px `accent` rounded square, "Huddle · now", title in Display-face 18px, one body line, two 48dp buttons (Not now / Plan it).
 
 ### Agent timeline (signature)
 - One row per tool call: node, connector, title (body-strong) + detail (small muted).
-- **Running node:** 44dp, `accent` border on `surface`, filled icon, expanding pulse ring (1300ms ease-out, loops). Detail is a skeleton line.
+- **Running node:** 44dp, `accent` border on `surface`, filled icon, its ring breathing in opacity (no scaling). Detail is a skeleton line.
 - **Finished node** *(refined)*: 32dp, `line` outline, regular icon in `muted`; the connector below fills with `accent` over `LINE_FILL_MS`. A `good` check appears at the row end.
-- **Ready node** *(refined)*: `accent` fill with `Check` (not green + Sparkle); single scale pop.
+- **Ready node** *(refined)*: `accent` fill with `Check` (not green + Sparkle); fades in, no pop.
 
 ### Map pins and callout
-- 40dp circle, category color border; picked = category fill + small `ink` check badge. Friends' picks as 16px face dots hanging under the pin. Drop-in stagger 45ms per pin.
+- 40dp circle, category color border; picked = category fill + small `ink` check badge. Friends' picks as 16px face dots hanging under the pin. Pins fade in, 40ms apart, capped at 120ms.
 - Callout: `surface`, 20px radius, overlay shadow, rotated-square tail; name (headline), rating (gold star) + price, two-line blurb, Add (accent stadium) / Details (outline stadium).
 
 ### Navigation
@@ -303,9 +303,15 @@ The **perforation** (a dashed hairline with 20px circular notches cut from both 
 - Header back button: one component, 48dp circular, `surface` + `line` border (refined: Map currently uses a 40dp variant, Incoming a borderless one).
 
 ### Motion
-- **One authored moment per screen:** popup = banner spring; Working = node pulse + connector draw; Map = globe zoom then pin drop; Booked = the share card rising (refined: replaces seal + confetti).
-- Everything else enters with a short fade/rise (≤320ms, ease-out cubic), staggered at most 70ms, from an already-visible layout.
-- `useReducedMotion()` collapses every sequence to its final state (already implemented on Incoming, Working, Map, Confetti).
+**Calm, not bouncy** (Arun, 2026-10-24: "remove the bounciness"). Things appear; they don't bounce. Every value lives in `apps/mobile/src/theme/motion.ts`. Use its helpers (`fadeIn`, `fadeOut`, `nudgeIn`, `stagger`, `PULSE`) instead of new numbers.
+- **No springs, no overshoot, no scale-from-zero, no pops.** No `ZoomIn`, no `.springify()`, no `withSpring`, no scale keyframes past 1.
+- **Fades:** opacity, 150–220ms (`DURATION.fast/base/slow`), ease-out (`EASE_OUT` = bezier(0.2, 0, 0, 1)).
+- **Movement:** a translate of 8px or less (`nudgeIn`), and only where direction means something: onboarding pages slide toward where you're going. Lists (chat bubbles, timeline rows, pins) just fade. The heads-up banner is the one exception. It slides down from the top edge (220ms ease-out, no overshoot), like the system notification it imitates.
+- **Stagger:** 40ms between items (`stagger(i)`), capped at 120ms, so a whole cascade lands within about 300ms.
+- **Loops:** only a gentle opacity pulse for "live" things (`PULSE`: 900ms to 35% and back): the "Huddle is working" dot, the running timeline node, the focused city on the destination globe, and skeletons. No scaling pulse rings.
+- **One authored moment per screen:** popup = banner slide; Working = node breathing + connector draw; Destinations / Map = the globe swing-in; Booked = the content fading in (seal and confetti burst removed).
+- Reduced motion: `useReducedMotion()` collapses sequences to their final state (Incoming, Working, Map, Destinations). Reanimated's entering animations follow the system setting on their own.
+- The three.js globe's own camera swing and its intro pulse rings are inside `components/globe` and aren't covered here yet.
 
 ## Do's and Don'ts
 

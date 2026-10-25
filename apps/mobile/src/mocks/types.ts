@@ -74,9 +74,8 @@ export type DestinationSuggestion = {
   airport: string; // "DEN"
   lat: number;
   lng: number;
-  match: number; // 0-100, how well it fits the chat + preferences
+  match: number; // 0-100 fit, hand-set in the mock (nothing computes it yet), so not shown
   why: string; // the signal behind the suggestion, in a few words: "Red Rocks show Sun"
-  hasDemoData: boolean; // has flights, hotels, and places, so the map can open for it
   flightTime: string; // nonstop flight time from the origin: "2h 15m"
   votes: string[]; // Member.id, friends who voted for this idea
   headlinePlaceId: string; // the show/spot that makes the case, always in the default plan

@@ -2,7 +2,7 @@ import { router, useLocalSearchParams } from "expo-router";
 import { ArrowRight, CheckCircle, ShieldCheck } from "phosphor-react-native";
 import { useRef, useState } from "react";
 import { ScrollView, type ScrollViewInstance, Text, View } from "react-native";
-import Animated, { FadeInUp, useReducedMotion, ZoomIn } from "react-native-reanimated";
+import Animated, { useReducedMotion } from "react-native-reanimated";
 import { destinationSteps } from "@/components/timeline/destinationSteps";
 import { LiveDot, ProgressBar } from "@/components/timeline/ProgressBar";
 import { ReadyRow, StepRow } from "@/components/timeline/StepRow";
@@ -13,6 +13,7 @@ import { brief } from "@/mocks";
 import { destinationSuggestions } from "@/mocks/destinations";
 import { usePreferences } from "@/store/preferences";
 import { colors } from "@/theme";
+import { fadeIn } from "@/theme/motion";
 
 // Dev only: the same run with the flights tool failing, to review the fallback row.
 const withFallback = (steps: PlaybackStep[]): PlaybackStep[] =>
@@ -51,7 +52,7 @@ export default function Working() {
       className="gap-0 px-0 pt-0"
       footer={
         finished ? (
-          <Animated.View entering={instant ? undefined : FadeInUp.duration(300)}>
+          <Animated.View entering={instant ? undefined : fadeIn()}>
             <Button
               label="See the ideas"
               onPress={() => router.push("/plan/summary")}
@@ -69,7 +70,7 @@ export default function Working() {
       <View className="gap-3 px-5 pb-4 pt-4">
         <View className="flex-row items-center gap-2">
           {ready ? (
-            <Animated.View entering={instant ? undefined : ZoomIn.duration(200)}>
+            <Animated.View entering={instant ? undefined : fadeIn()}>
               <CheckCircle size={16} color={colors.good} weight="fill" />
             </Animated.View>
           ) : (

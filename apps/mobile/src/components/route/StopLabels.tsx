@@ -1,8 +1,9 @@
 import { useMemo } from "react";
 import { Text, View } from "react-native";
-import Animated, { FadeIn } from "react-native-reanimated";
+import Animated from "react-native-reanimated";
 import type { GlobePoint, ScreenPoint, ScreenProjection } from "@/components/globe/GlobeScene";
 import { colors } from "@/theme";
+import { fadeIn, stagger } from "@/theme/motion";
 
 type Panel = {
   width: number; // panel size, to keep labels inside it
@@ -146,7 +147,7 @@ export function StopLabels({ points, projection, width, height, bottomInset, act
         return (
           <Animated.View
             key={`${p.kind}-${p.code ?? p.name}`}
-            entering={FadeIn.duration(350).delay(80 * i)}
+            entering={fadeIn(stagger(i))}
             pointerEvents="none"
             style={{
               position: "absolute",

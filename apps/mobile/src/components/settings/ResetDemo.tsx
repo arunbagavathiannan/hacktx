@@ -1,7 +1,8 @@
 import { useEffect, useRef } from "react";
 import { AccessibilityInfo, type HostInstance, Platform, Text, View } from "react-native";
-import Animated, { FadeInDown } from "react-native-reanimated";
+import Animated from "react-native-reanimated";
 import { Button, Muted } from "@/components/ui";
+import { fadeIn } from "@/theme/motion";
 
 type Props = {
   onCancel: () => void;
@@ -28,7 +29,7 @@ export function ResetConfirm({ onCancel, onConfirm }: Props) {
   }, []);
 
   return (
-    <Animated.View entering={FadeInDown.duration(200)}>
+    <Animated.View entering={fadeIn()}>
       <View ref={box} accessibilityViewIsModal className="gap-3 pb-1">
         <View className="gap-1">
           <Text

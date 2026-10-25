@@ -3,7 +3,7 @@ import { Redirect, router, useLocalSearchParams } from "expo-router";
 import { ArrowRight, CaretLeft } from "phosphor-react-native";
 import { useMemo, useState } from "react";
 import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
-import Animated, { FadeIn, useReducedMotion } from "react-native-reanimated";
+import Animated, { useReducedMotion } from "react-native-reanimated";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { GlobeIntro } from "@/components/globe/GlobeIntro";
 import { categoryMeta, type Filter, filters } from "@/components/map/categories";
@@ -17,17 +17,24 @@ import {
   globeRoute,
   type LegPlan,
   planLegs,
-  travelPerPerson,
 } from "@/components/route/legs";
 import { RouteView } from "@/components/route/RouteView";
 import { type MapView, ViewToggle } from "@/components/route/ViewToggle";
 import { AvatarStack, Button, Chip, Heading, Muted } from "@/components/ui";
-import { estimatePerPerson, groupSize, nightsBetween } from "@/lib/pricing";
+import { groupSize } from "@/lib/pricing";
 import { places as denverPlaces, members } from "@/mocks";
 import { destinationSuggestions } from "@/mocks/destinations";
 import { multiFlights, multiTrip } from "@/mocks/multi";
-import { isDriving, togglePlace, useDestination, usePlan, withFlight } from "@/store/plan";
+import {
+  isDriving,
+  planPerPerson,
+  togglePlace,
+  useDestination,
+  usePlan,
+  withFlight,
+} from "@/store/plan";
 import { colors } from "@/theme";
+import { fadeIn, MAX_STAGGER_MS } from "@/theme/motion";
 
 // Room on the map for the overlays: filter chips on top, the flights row at the bottom.
 const MAP_INSETS = { top: 96, right: 52, bottom: 132, left: 52 };
@@ -137,21 +144,15 @@ function MapScreen() {
       ]
     : [];
 
-  // Same math as the booked screen (lib/pricing), plus each leg's flight or gas.
-  // The map's places (and the hotel) are all at the first stop, so the hotel is priced for
-  // that stop's nights only; on the one-city trip that's the whole trip.
+  // The shared estimate (store/plan planPerPerson): places and hotel, plus each leg's flight
+  // or gas. The destination cards, summary and home card show the same number.
   const placePicks = picks.filter((id) => !ALL_FLIGHT_IDS.has(id));
   const people = groupSize(activeTrip);
-  const firstStop = activeTrip.stops[0];
-  const perPerson =
-    estimatePerPerson(placePicks, {
-      places,
-      flights: [],
-      people,
-      nights: firstStop
-        ? nightsBetween(firstStop.arrive, firstStop.depart)
-        : nightsBetween(activeTrip.dates.start, activeTrip.dates.end),
-    }) + travelPerPerson(legs);
+  const perPerson = planPerPerson(
+    { trip: activeTrip, flights: tripFlights, places },
+    picks,
+    driving,
+  );
   const driveMiles = legs.reduce(
     (s, l) => s + (l.mode === "drive" ? (l.leg.driveMiles ?? 0) : 0),
     0,
@@ -271,7 +272,7 @@ function MapScreen() {
               />
               {revealed && firstLeg ? (
                 <Animated.View
-                  entering={FadeIn.delay(300)}
+                  entering={fadeIn(MAX_STAGGER_MS)}
                   style={{ position: "absolute", bottom: 12, left: 0, right: 0 }}
                 >
                   {firstLeg.mode === "drive" ? (

@@ -1,10 +1,18 @@
 import { create } from "zustand";
-import { bestHotel, groupSize, nightsBetween, placePerPerson, tripPerPerson } from "@/lib/pricing";
+import { planLegs, travelPerPerson } from "@/components/route/legs";
+import {
+  bestHotel,
+  estimatePerPerson,
+  groupSize,
+  nightsBetween,
+  placePerPerson,
+} from "@/lib/pricing";
 import {
   type DestinationSuggestion,
   destinationById,
   destinationSuggestions,
 } from "@/mocks/destinations";
+import type { Flight, Place, Trip } from "@/mocks/types";
 
 type State = {
   answers: Record<string, string>; // Clarification.id -> chosen option
@@ -61,15 +69,47 @@ export function defaultPicksFor(dest: DestinationSuggestion) {
   return [flight?.id, hotel?.hotel.id, show?.id].filter((id): id is string => Boolean(id));
 }
 
-// What a destination's default plan costs each person: the est. $/person on the destination
-// screen, summary, and timeline. Same math as the map footer when the map opens.
-export function defaultEstimateFor(dest: DestinationSuggestion) {
-  return tripPerPerson(defaultPicksFor(dest), dest);
+// The one per-person estimate every screen shows (map footer, destination ticket and rows,
+// summary teaser, home card): the picked places and hotel, plus each leg's flight, or split
+// gas when the group drives. The hotel is priced for the first stop's nights, which on a
+// one-city trip is the whole trip. Booked builds its itinerary from the same lib/pricing
+// pieces, so it lands on the same number (plus any extra night an early flight needs).
+export function planPerPerson(
+  plan: { trip: Trip; flights: Flight[]; places: Place[] },
+  picks: string[],
+  driving: boolean,
+) {
+  const { trip } = plan;
+  const stop = trip.stops[0];
+  const nights = stop
+    ? nightsBetween(stop.arrive, stop.depart)
+    : nightsBetween(trip.dates.start, trip.dates.end);
+  // Flights are counted per leg below, so places-only here (flight ids don't match a place).
+  const stay = estimatePerPerson(picks, {
+    places: plan.places,
+    flights: [],
+    people: groupSize(trip),
+    nights,
+  });
+  return stay + travelPerPerson(planLegs(trip, plan.flights, picks, driving));
+}
+
+// What a destination's default plan costs each person, flying or driving.
+export function defaultEstimateFor(dest: DestinationSuggestion, driving = false) {
+  return planPerPerson(dest, defaultPicksFor(dest), driving);
 }
 
 // Every suggestion with its default plan estimate, in the planner's order.
-export function destinationEstimates() {
-  return destinationSuggestions.map((d) => ({ destination: d, perPerson: defaultEstimateFor(d) }));
+export function destinationEstimates(driving = false) {
+  return destinationSuggestions.map((d) => ({
+    destination: d,
+    perPerson: defaultEstimateFor(d, driving),
+  }));
+}
+
+// The group's "Fly or drive?" answer, as a boolean.
+export function useDriving() {
+  return isDriving(usePlan((s) => s.answers));
 }
 
 // The destination the post-pick screens (map, booked, home card) show. Before the group picks

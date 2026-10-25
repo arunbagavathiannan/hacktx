@@ -2,7 +2,7 @@ import { router, useFocusEffect, useLocalSearchParams } from "expo-router";
 import { ArrowLeft, ArrowRight, Check } from "phosphor-react-native";
 import { useCallback, useState } from "react";
 import { BackHandler, Platform, Pressable, Text, View } from "react-native";
-import Animated, { FadeInLeft, FadeInRight } from "react-native-reanimated";
+import Animated from "react-native-reanimated";
 import { ChoiceCard } from "@/components/onboarding/ChoiceCard";
 import {
   budgetOptions,
@@ -17,6 +17,7 @@ import { ProgressBar } from "@/components/onboarding/ProgressBar";
 import { Body, Button, Chip, Display, Screen } from "@/components/ui";
 import { usePreferences, usePreferencesHydrated } from "@/store/preferences";
 import { colors, icon } from "@/theme";
+import { nudgeIn } from "@/theme/motion";
 
 const last = steps.length - 1;
 const stepKeys = steps.map((s) => s.key);
@@ -75,7 +76,8 @@ export default function Onboarding() {
   if (!hydrated) return <View className="flex-1 bg-bg" />;
 
   const { title, subtitle } = steps[step];
-  const entering = (direction === 1 ? FadeInRight : FadeInLeft).duration(280);
+  // The page slides in (8px) from the side you are heading to.
+  const entering = nudgeIn(direction === 1 ? "right" : "left");
 
   return (
     <Screen

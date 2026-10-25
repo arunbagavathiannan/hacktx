@@ -58,7 +58,7 @@ export function TripFacts({
         detail={
           destination
             ? `From ${trip.origin.city} (${trip.origin.airport})`
-            : `${ideas} ideas from the chat · from ${trip.origin.city} (${trip.origin.airport})`
+            : `${ideas} ideas that fit everyone · from ${trip.origin.city} (${trip.origin.airport})`
         }
       />
       <Row icon={CalendarBlank} title={trip.dates.label} />

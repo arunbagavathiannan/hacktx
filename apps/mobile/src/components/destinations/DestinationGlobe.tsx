@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { View } from "react-native";
 import Animated, {
-  Easing,
   useAnimatedStyle,
   useSharedValue,
   withRepeat,
@@ -13,11 +12,13 @@ import { StopLabels } from "@/components/route/StopLabels";
 import type { DestinationSuggestion } from "@/mocks/destinations";
 import type { TripBrief } from "@/mocks/types";
 import { colors } from "@/theme";
+import { PULSE } from "@/theme/motion";
 
 type Props = {
   origin: TripBrief["origin"];
   ideas: DestinationSuggestion[];
   selectedId: string;
+  driving: boolean; // the group answered "Drive": arcs are drawn as drives
   height: number;
   // Hold the swing-in at its end (reduced motion, screenshots).
   frozen: boolean;
@@ -26,10 +27,18 @@ type Props = {
 
 const RING = 22; // dp: hugs the marker, inside the gap StopLabels leaves before a label
 
-// The ideas on the globe: home (AUS) plus every candidate city, with a flight arc to each.
+// The ideas on the globe: home (AUS) plus every candidate city, with an arc to each.
 // The overview camera frames all of them (it ignores `focus`, see GlobeScene), so "focusing" a
 // city is done on top of the canvas: a ring on its marker and its label lit, the others dimmed.
-export function DestinationGlobe({ origin, ideas, selectedId, height, frozen, onFail }: Props) {
+export function DestinationGlobe({
+  origin,
+  ideas,
+  selectedId,
+  driving,
+  height,
+  frozen,
+  onFail,
+}: Props) {
   const [width, setWidth] = useState(0);
   const [projection, setProjection] = useState<ScreenProjection | null>(null);
 
@@ -49,14 +58,14 @@ export function DestinationGlobe({ origin, ideas, selectedId, height, frozen, on
     const arcs: GlobeArc[] = ideas.map((d) => ({
       from: home,
       to: { lat: d.lat, lng: d.lng },
-      mode: "fly",
+      mode: driving ? ("drive" as const) : ("fly" as const),
     }));
     const focus = {
       lat: ideas.reduce((s, d) => s + d.lat, 0) / Math.max(1, ideas.length),
       lng: ideas.reduce((s, d) => s + d.lng, 0) / Math.max(1, ideas.length),
     };
     return { points, arcs, focus };
-  }, [origin, ideas]);
+  }, [origin, ideas, driving]);
 
   const selectedIndex = ideas.findIndex((d) => d.id === selectedId);
   const pointIndex = selectedIndex >= 0 ? selectedIndex + 1 : undefined; // +1: home is first
@@ -90,26 +99,32 @@ export function DestinationGlobe({ origin, ideas, selectedId, height, frozen, on
   );
 }
 
-// Pulses outward from the focused city (holds still with reduced motion).
+// A ring on the focused city that breathes (opacity only, no scaling). Holds still with
+// reduced motion.
 function FocusRing({ x, y, still }: { x: number; y: number; still: boolean }) {
-  const t = useSharedValue(0);
+  const o = useSharedValue(1);
   useEffect(() => {
     if (still) return;
-    t.value = withRepeat(withTiming(1, { duration: 1400, easing: Easing.out(Easing.ease) }), -1);
-  }, [t, still]);
-  const pulse = useAnimatedStyle(() => ({
-    opacity: 0.8 * (1 - t.value),
-    transform: [{ scale: 1 + 0.7 * t.value }],
-  }));
+    o.value = withRepeat(withTiming(PULSE.min, { duration: PULSE.duration }), -1, true);
+  }, [o, still]);
+  const pulse = useAnimatedStyle(() => ({ opacity: o.value }));
 
-  const box = { position: "absolute" as const, left: x - RING / 2, top: y - RING / 2 };
-  const circle = { width: RING, height: RING, borderRadius: RING / 2, borderColor: colors.accent };
   return (
-    <View pointerEvents="none" style={[box, { width: RING, height: RING }]}>
-      <View style={[circle, { position: "absolute", borderWidth: 2 }]} />
-      {still ? null : (
-        <Animated.View style={[circle, { position: "absolute", borderWidth: 2 }, pulse]} />
-      )}
-    </View>
+    <Animated.View
+      pointerEvents="none"
+      style={[
+        {
+          position: "absolute",
+          left: x - RING / 2,
+          top: y - RING / 2,
+          width: RING,
+          height: RING,
+          borderRadius: RING / 2,
+          borderWidth: 2,
+          borderColor: colors.accent,
+        },
+        still ? null : pulse,
+      ]}
+    />
   );
 }

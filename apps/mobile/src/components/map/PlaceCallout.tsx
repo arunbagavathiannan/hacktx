@@ -98,10 +98,7 @@ export function PlaceCallout({
 
   const animated = useAnimatedStyle(() => ({
     opacity: progress.value,
-    transform: [
-      { translateY: (1 - progress.value) * (below ? -6 : 6) },
-      { scale: 0.92 + progress.value * 0.08 },
-    ],
+    transform: [{ translateY: (1 - progress.value) * (below ? -6 : 6) }],
   }));
 
   return (

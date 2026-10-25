@@ -11,17 +11,19 @@ import {
 } from "@/components/destinations/DestinationChoices";
 import { DestinationGlobe } from "@/components/destinations/DestinationGlobe";
 import { prefetchMapTiles } from "@/components/map/MapCanvas";
+import { gasPerPerson, planLegs } from "@/components/route/legs";
 import { AvatarStack, Button, Display, IconButton, Label, Muted } from "@/components/ui";
 import { brief } from "@/mocks";
 import { destinationSuggestions, leadingDestination } from "@/mocks/destinations";
-import { defaultEstimateFor, defaultPicksFor, usePlan } from "@/store/plan";
+import { defaultEstimateFor, defaultPicksFor, useDriving, usePlan } from "@/store/plan";
 import { colors } from "@/theme";
 
 const GLOBE_HEIGHT = 250;
 
 // Step 6b of the demo: the destination ideas on the globe. Huddle suggested them; the group
-// picks. Home (AUS) and every idea sit on the globe with a flight arc each; the focused idea
-// is the ticket below it, the others are rows. "Plan [City]" saves the pick and opens its map.
+// picks. Home (AUS) and every idea sit on the globe with an arc each; the focused idea is the
+// ticket below it, and every idea is a row in the radio list (the focused one marked).
+// "Plan [City]" saves the pick and opens its map.
 // MOCK: friends' votes are seeded (mocks/destinations.ts).
 // Dev: ?demo=destinations holds the globe settled (screenshots); ?focus=msy|bna|den starts
 // with that idea focused. Neither is linked from the app.
@@ -40,27 +42,35 @@ export default function Destinations() {
   );
   const [globeFailed, setGlobeFailed] = useState(false);
 
+  // Same estimate as the map footer, following the "Fly or drive?" answer.
+  const driving = useDriving();
   const choices: Choice[] = useMemo(
     () =>
       destinationSuggestions.map((d) => {
         const picks = defaultPicksFor(d);
         const flight = d.flights.find((f) => picks.includes(f.id));
+        const out = d.trip.legs[0];
         return {
           destination: d,
-          perPerson: defaultEstimateFor(d),
-          roundTrip: flight?.pricePerPerson ?? null,
+          perPerson: defaultEstimateFor(d, driving),
+          travel: driving
+            ? {
+                mode: "drive" as const,
+                hours: out?.driveHours ?? null,
+                gas: gasPerPerson(planLegs(d.trip, d.flights, picks, true)),
+              }
+            : { mode: "fly" as const, roundTrip: flight?.pricePerPerson ?? null },
           voters: brief.members.filter((m) => d.votes.includes(m.id)),
           leader: d.id === leadingDestination.id,
         };
       }),
-    [],
+    [driving],
   );
   const selectedIndex = Math.max(
     0,
     choices.findIndex((c) => c.destination.id === selectedId),
   );
   const selected = choices[selectedIndex] ?? choices[0];
-  const others = choices.filter((c) => c !== selected);
   const allFit = choices.every((c) => c.perPerson <= brief.budgetPerPerson);
 
   const focusOn = (c: Choice) => {
@@ -102,7 +112,7 @@ export default function Destinations() {
           className="border-y border-line"
           accessible
           accessibilityRole="image"
-          accessibilityLabel={`Globe: ${brief.origin.city} with a flight to ${choices
+          accessibilityLabel={`Globe: ${brief.origin.city} with a ${driving ? "drive" : "flight"} to ${choices
             .map((c) => c.destination.city)
             .join(", ")}. ${selected?.destination.city} is highlighted.`}
         >
@@ -110,6 +120,7 @@ export default function Destinations() {
             origin={brief.origin}
             ideas={destinationSuggestions}
             selectedId={selected?.destination.id ?? ""}
+            driving={driving}
             height={GLOBE_HEIGHT}
             frozen={frozen}
             onFail={() => setGlobeFailed(true)}
@@ -117,12 +128,7 @@ export default function Destinations() {
         </View>
       )}
 
-      <ScrollView
-        className="flex-1"
-        contentContainerClassName="gap-5 px-5 pb-6 pt-5"
-        accessibilityRole="radiogroup"
-        accessibilityLabel="Destination ideas"
-      >
+      <ScrollView className="flex-1" contentContainerClassName="gap-5 px-5 pb-6 pt-5">
         {selected ? (
           <DestinationTicket
             choice={selected}
@@ -131,19 +137,17 @@ export default function Destinations() {
             animate={!reduceMotion}
           />
         ) : null}
-        {others.length > 0 ? (
-          <View>
-            <Label className="pb-1">Other ideas</Label>
-            {others.map((c) => (
-              <DestinationRow
-                key={c.destination.id}
-                choice={c}
-                animate={!reduceMotion}
-                onPress={() => focusOn(c)}
-              />
-            ))}
-          </View>
-        ) : null}
+        <View accessibilityRole="radiogroup" accessibilityLabel="Destination ideas">
+          <Label className="pb-1">Pick one for the group</Label>
+          {choices.map((c) => (
+            <DestinationRow
+              key={c.destination.id}
+              choice={c}
+              selected={c === selected}
+              onPress={() => focusOn(c)}
+            />
+          ))}
+        </View>
       </ScrollView>
 
       <View className="border-t border-line px-5 pb-2 pt-3">
