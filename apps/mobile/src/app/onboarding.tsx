@@ -15,7 +15,7 @@ import {
 } from "@/components/onboarding/options";
 import { ProgressBar } from "@/components/onboarding/ProgressBar";
 import { Button, Chip, Label, Muted, Screen, Title } from "@/components/ui";
-import { usePreferences } from "@/store/preferences";
+import { usePreferences, usePreferencesHydrated } from "@/store/preferences";
 import { colors, icon } from "@/theme";
 
 const last = steps.length - 1;
@@ -69,6 +69,10 @@ export default function Onboarding() {
       return () => sub.remove();
     }, [step]),
   );
+
+  // Wait for saved answers to load, so a cold start never shows (or saves over) empty ones.
+  const hydrated = usePreferencesHydrated();
+  if (!hydrated) return <View className="flex-1 bg-bg" />;
 
   const { title, subtitle } = steps[step];
   const entering = (direction === 1 ? FadeInRight : FadeInLeft).duration(280);
