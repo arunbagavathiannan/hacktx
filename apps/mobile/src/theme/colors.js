@@ -8,7 +8,7 @@ const colors = {
   line: "#2C2824",
   ink: "#F5F1EC",
   muted: "#A39B91",
-  faint: "#6E675F",
+  faint: "#8F877D", // 5.6:1 on bg, 5.2 on surface, 4.7 on raised
   accent: "#FF7A3D",
   "accent-soft": "#3A2216",
   gold: "#FFB547",
