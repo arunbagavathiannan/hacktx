@@ -1,4 +1,4 @@
-import { AirplaneTilt, CheckCircle, PlusCircle } from "phosphor-react-native";
+import { AirplaneTilt, CircleIcon, RadioButton } from "phosphor-react-native";
 import { Pressable, ScrollView, Text, View } from "react-native";
 import type { Flight, Member } from "@/mocks/types";
 import { colors } from "@/theme";
@@ -7,50 +7,63 @@ import { sourceLabel } from "./categories";
 type Props = {
   flights: Flight[];
   members: Member[];
-  pickedIds: string[];
-  onToggle: (id: string) => void;
+  pickedId: string | null; // the one flight the group takes
+  onPick: (id: string) => void;
   route: string; // "AUS → DEN"
+  showHeader?: boolean; // the Route view labels each leg itself
 };
 
-// Compact, horizontally scrolling flight options docked above the footer.
-export function FlightsRow({ flights, members, pickedIds, onToggle, route }: Props) {
+// Compact, horizontally scrolling flight options. Single-select: the whole group flies on
+// the same plane, so picking one replaces the other.
+export function FlightsRow({
+  flights,
+  members,
+  pickedId,
+  onPick,
+  route,
+  showHeader = true,
+}: Props) {
   if (flights.length === 0) return null;
   const byId = new Map(members.map((m) => [m.id, m]));
 
   return (
-    <View className="gap-2">
-      <View className="flex-row items-center gap-1.5 px-5">
-        <AirplaneTilt size={14} color={colors.muted} weight="regular" />
-        <Text className="font-body-bold text-xs uppercase tracking-widest text-muted">
-          Flights {route}
-        </Text>
-        <Text className="font-body text-xs text-faint">· {sourceLabel.serpapi_flights}</Text>
-      </View>
+    <View className="gap-2" accessibilityRole="radiogroup" accessibilityLabel={`Flights ${route}`}>
+      {showHeader ? (
+        <View className="flex-row items-center gap-1.5 px-5">
+          <AirplaneTilt size={14} color={colors.muted} weight="regular" />
+          <Text className="font-body-bold text-xs uppercase tracking-widest text-muted">
+            One flight {route}
+          </Text>
+          <Text numberOfLines={1} className="flex-1 font-body text-xs text-faint">
+            · {sourceLabel.serpapi_flights}
+          </Text>
+        </View>
+      ) : null}
       <ScrollView
         horizontal
         showsHorizontalScrollIndicator={false}
         contentContainerClassName="gap-2 px-5"
       >
         {flights.map((f) => {
-          const picked = pickedIds.includes(f.id);
+          const picked = pickedId === f.id;
           const pickers = f.pickedBy.flatMap((id) => byId.get(id) ?? []);
           return (
             <Pressable
               key={f.id}
-              accessibilityRole="button"
-              accessibilityState={{ selected: picked }}
+              accessibilityRole="radio"
+              aria-checked={picked}
               accessibilityLabel={`${f.airline} ${f.depart}, $${f.pricePerPerson}${
-                picked ? ", in your plan" : ""
+                picked ? ", the group's flight" : ""
               }`}
-              onPress={() => onToggle(f.id)}
+              onPress={() => onPick(f.id)}
               className={`w-[228px] flex-row items-center gap-2.5 rounded-2xl border px-3 py-2.5 active:opacity-80 ${
                 picked ? "border-accent bg-accent-soft" : "border-line bg-surface/95"
               }`}
             >
               {picked ? (
-                <CheckCircle size={22} color={colors.accent} weight="fill" />
+                <RadioButton size={22} color={colors.accent} weight="fill" />
               ) : (
-                <PlusCircle size={22} color={colors.muted} weight="regular" />
+                <CircleIcon size={22} color={colors.muted} weight="regular" />
               )}
               <View className="flex-1 gap-0.5">
                 <View className="flex-row items-center justify-between gap-2">

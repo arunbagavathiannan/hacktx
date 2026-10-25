@@ -3,6 +3,7 @@ import { MapTrifold, Sparkle } from "phosphor-react-native";
 import { useEffect, useMemo, useState } from "react";
 import { View } from "react-native";
 import Animated, { FadeInDown } from "react-native-reanimated";
+import { prefetchMapTiles } from "@/components/map/MapCanvas";
 import { ClarificationCard } from "@/components/summary/ClarificationCard";
 import {
   demoPrefs,
@@ -30,6 +31,9 @@ const autoFilled = new Set<string>();
 
 // What the agent understood from the chat, plus the one or two things it still needs.
 export default function Summary() {
+  useEffect(() => {
+    prefetchMapTiles();
+  }, []); // cache map tiles before the map opens
   // MOCK: `?demo=prefs` renders with sample preferences (PR screenshots, demo rehearsal).
   // Display-only: its answers live in local state and never reach usePlan.
   const isDemo = useLocalSearchParams<{ demo?: string }>().demo === "prefs";

@@ -54,6 +54,16 @@ export function bestHotel(
   return fits ?? ranked[0];
 }
 
+// MOCK: gas assumptions for driving legs until we have a real fuel/routing source.
+// Every drive-cost number in the app comes from here.
+export const DRIVE_MOCK = { mpg: 25, gasPerGallon: 3.2 };
+
+// Per-person gas for one drive, split across the whole group (one car's worth of gas;
+// the mock doesn't model a second car yet).
+export function driveCostPerPerson(miles: number, people: number) {
+  return Math.round(((miles / DRIVE_MOCK.mpg) * DRIVE_MOCK.gasPerGallon) / Math.max(1, people));
+}
+
 // Per-person estimate for a set of picks. Only one flight and one hotel count (the last
 // picked of each), since a group books one of each.
 export function estimatePerPerson(
