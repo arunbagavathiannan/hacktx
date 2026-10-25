@@ -8,6 +8,7 @@ import Animated, {
   withTiming,
 } from "react-native-reanimated";
 import { colors } from "@/theme";
+import { PULSE } from "@/theme/motion";
 
 // Thin overall progress bar under the timeline header. `value` is 0..1.
 export function ProgressBar({ value }: { value: number }) {
@@ -33,7 +34,7 @@ export function ProgressBar({ value }: { value: number }) {
 export function LiveDot() {
   const o = useSharedValue(1);
   useEffect(() => {
-    o.value = withRepeat(withTiming(0.25, { duration: 700 }), -1, true);
+    o.value = withRepeat(withTiming(PULSE.min, { duration: PULSE.duration }), -1, true);
   }, [o]);
   const style = useAnimatedStyle(() => ({ opacity: o.value }));
   return (

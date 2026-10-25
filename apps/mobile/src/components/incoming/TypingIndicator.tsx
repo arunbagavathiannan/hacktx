@@ -29,7 +29,6 @@ function Dot({ delay }: { delay: number }) {
 
   const style = useAnimatedStyle(() => ({
     opacity: 0.4 + lift.value * 0.6,
-    transform: [{ translateY: -3 * lift.value }],
   }));
 
   return (

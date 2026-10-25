@@ -1,8 +1,9 @@
 import { CaretLeft, Check } from "phosphor-react-native";
 import { Pressable, Text, View } from "react-native";
-import Animated, { ZoomIn } from "react-native-reanimated";
+import Animated from "react-native-reanimated";
 import type { Member, Place } from "@/mocks/types";
 import { colors } from "@/theme";
+import { fadeIn, stagger } from "@/theme/motion";
 import { categoryMeta } from "./categories";
 
 export const PIN_SIZE = 40;
@@ -61,7 +62,7 @@ export function PlacePin({
 
   return (
     <Animated.View
-      entering={ZoomIn.delay(100 + index * 45).duration(240)}
+      entering={fadeIn(stagger(index))}
       style={{
         position: "absolute",
         left: x - size / 2,

@@ -1,7 +1,8 @@
 import { Text, View } from "react-native";
-import Animated, { FadeInDown } from "react-native-reanimated";
+import Animated from "react-native-reanimated";
 import { Avatar } from "@/components/ui";
 import type { ChatMessage, Member } from "@/mocks/types";
+import { fadeIn } from "@/theme/motion";
 
 // "2026-10-24T19:02:00-05:00" -> "7:02 PM". Reads the wall-clock time from the string itself so
 // the chat shows the same time on every device and in screenshots, whatever the timezone.
@@ -15,7 +16,7 @@ export function clockTime(iso: string) {
 // One incoming message: avatar, sender name in their color, bubble, time.
 export function ChatBubble({ message, sender }: { message: ChatMessage; sender: Member }) {
   return (
-    <Animated.View entering={FadeInDown.duration(260)}>
+    <Animated.View entering={fadeIn()}>
       <View className="flex-row items-start gap-2.5">
         {/* Sits beside the bubble, below the sender name. */}
         <View className="mt-[22px]">

@@ -1,10 +1,11 @@
 import { CaretRight } from "phosphor-react-native";
 import { useEffect, useRef } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
-import Animated, { FadeIn, FadeInDown, FadeOut } from "react-native-reanimated";
+import Animated from "react-native-reanimated";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Label, Muted, Title } from "@/components/ui";
 import { colors } from "@/theme";
+import { DURATION, fadeIn, fadeOut, stagger } from "@/theme/motion";
 import type { GlobeArc, GlobePoint } from "./GlobeScene";
 import { SafeGlobe } from "./SafeGlobe";
 
@@ -60,7 +61,7 @@ export function GlobeIntro({
   return (
     <Animated.View
       style={[StyleSheet.absoluteFill, { backgroundColor: colors.bg }]}
-      exiting={FadeOut.duration(450)}
+      exiting={fadeOut(DURATION.slow)}
     >
       <SafeGlobe
         focus={focus}
@@ -89,13 +90,13 @@ export function GlobeIntro({
         <View className="flex-1" pointerEvents="none" />
 
         <Animated.View
-          entering={FadeInDown.delay(250).duration(600)}
+          entering={fadeIn(stagger(1))}
           style={{ gap: 4, paddingHorizontal: 24, paddingBottom: 40 }}
           pointerEvents="none"
         >
           <Label className="text-accent">{eyebrow}</Label>
           <Title className="text-4xl leading-[44px]">{title}</Title>
-          <Animated.View entering={FadeIn.delay(700).duration(500)}>
+          <Animated.View entering={fadeIn(stagger(3))}>
             <Muted className="text-base">{subtitle}</Muted>
           </Animated.View>
         </Animated.View>

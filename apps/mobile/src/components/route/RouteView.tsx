@@ -1,13 +1,14 @@
 import { AirplaneTilt, Car } from "phosphor-react-native";
 import { useMemo, useState } from "react";
 import { ScrollView, Text, View } from "react-native";
-import Animated, { FadeIn, useReducedMotion } from "react-native-reanimated";
+import Animated, { useReducedMotion } from "react-native-reanimated";
 import { DRIVE_ARC_COLOR, type ScreenProjection } from "@/components/globe/GlobeScene";
 import { SafeGlobe } from "@/components/globe/SafeGlobe";
 import { FlightsRow } from "@/components/map/FlightsRow";
 import { groupSize } from "@/lib/pricing";
 import type { Member, Trip } from "@/mocks/types";
 import { colors } from "@/theme";
+import { fadeIn, stagger } from "@/theme/motion";
 import { DriveCard } from "./DriveCard";
 import { airportFor, globeRoute, type LegPlan } from "./legs";
 import { StopLabels } from "./StopLabels";
@@ -130,7 +131,7 @@ export function RouteView({
           const route = `${airportFor(trip, leg.leg.from)} → ${airportFor(trip, leg.leg.to)}`;
           const Icon = leg.mode === "drive" ? Car : AirplaneTilt;
           return (
-            <Animated.View key={leg.key} entering={FadeIn.delay(120 * i)} className="gap-2">
+            <Animated.View key={leg.key} entering={fadeIn(stagger(i))} className="gap-2">
               <View className="flex-row items-center gap-2 px-5">
                 <View className="h-5 w-5 items-center justify-center rounded-full bg-raised">
                   <Text className="font-body-bold text-[10px] text-ink">{i + 1}</Text>

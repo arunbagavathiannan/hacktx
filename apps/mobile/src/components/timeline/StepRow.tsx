@@ -3,18 +3,16 @@ import { useEffect } from "react";
 import { Text, View } from "react-native";
 import Animated, {
   Easing,
-  FadeIn,
-  FadeInDown,
   useAnimatedStyle,
   useSharedValue,
   withRepeat,
-  withSequence,
   withTiming,
-  ZoomIn,
 } from "react-native-reanimated";
 import { Skeleton } from "@/components/ui";
 import { cn } from "@/lib/cn";
+import type { AgentStepResult } from "@/mocks/types";
 import { colors } from "@/theme";
+import { fadeIn, PULSE } from "@/theme/motion";
 import { toolIcons } from "./toolIcons";
 import {
   LINE_FILL_MS,
@@ -25,16 +23,13 @@ import {
 
 // NativeWind className doesn't reach Reanimated views on web, so animated pieces use style.
 
-// Expanding ring around the node while the tool call is running.
+// The running node's ring breathes (opacity only, no scaling) while the tool call runs.
 function PulseRing() {
-  const t = useSharedValue(0);
+  const o = useSharedValue(1);
   useEffect(() => {
-    t.value = withRepeat(withTiming(1, { duration: 1300, easing: Easing.out(Easing.ease) }), -1);
-  }, [t]);
-  const style = useAnimatedStyle(() => ({
-    opacity: 0.7 * (1 - t.value),
-    transform: [{ scale: 1 + 0.55 * t.value }],
-  }));
+    o.value = withRepeat(withTiming(PULSE.min, { duration: PULSE.duration }), -1, true);
+  }, [o]);
+  const style = useAnimatedStyle(() => ({ opacity: o.value }));
   return (
     <Animated.View
       pointerEvents="none"
@@ -77,6 +72,34 @@ type Props = {
   status: PlaybackStatus;
 };
 
+// One line per option the tool found (e.g. per destination idea), hairline-separated.
+function Results({ results }: { results: AgentStepResult[] }) {
+  return (
+    <View className="mt-2 border-t border-line">
+      {results.map((r) => (
+        <View key={r.label} className="flex-row items-baseline gap-2 border-b border-line py-1.5">
+          <Text className="font-body-semibold text-sm text-ink">{r.label}</Text>
+          {r.note ? (
+            <Text numberOfLines={1} className="flex-1 font-body text-sm text-muted">
+              {r.note}
+            </Text>
+          ) : (
+            <View className="flex-1" />
+          )}
+          {r.value ? (
+            <Text
+              className="font-body-bold text-sm text-ink"
+              style={{ fontVariant: ["tabular-nums"] }}
+            >
+              {r.value}
+            </Text>
+          ) : null}
+        </View>
+      ))}
+    </View>
+  );
+}
+
 // One tool call in the "Huddle is working" timeline. Every step connects down to the next
 // one, and the last one to the closing "Plan ready" row.
 export function StepRow({ step, status }: Props) {
@@ -86,7 +109,7 @@ export function StepRow({ step, status }: Props) {
   const tint = failed ? colors.gold : colors.accent;
 
   return (
-    <Animated.View entering={FadeInDown.duration(260)}>
+    <Animated.View entering={fadeIn()}>
       <View
         accessible
         accessibilityLabel={running ? `${step.label}, working` : stepSummary(step)}
@@ -113,7 +136,7 @@ export function StepRow({ step, status }: Props) {
             {running ? (
               <Text className="font-body-semibold text-xs text-accent">Working</Text>
             ) : (
-              <Animated.View entering={ZoomIn.duration(200)}>
+              <Animated.View entering={fadeIn()}>
                 {failed ? (
                   <WarningCircle size={20} color={colors.gold} weight="fill" />
                 ) : (
@@ -125,12 +148,13 @@ export function StepRow({ step, status }: Props) {
           {running ? (
             <Skeleton className="mt-1 h-3.5 w-3/4" />
           ) : (
-            <Animated.View entering={FadeIn.duration(260)}>
+            <Animated.View entering={fadeIn()}>
               <Text
                 className={cn("font-body text-sm leading-5", failed ? "text-gold" : "text-muted")}
               >
                 {failed ? (step.fallback ?? "Skipped. Huddle kept going without it.") : step.detail}
               </Text>
+              {!failed && step.results?.length ? <Results results={step.results} /> : null}
             </Animated.View>
           )}
         </View>
@@ -139,28 +163,24 @@ export function StepRow({ step, status }: Props) {
   );
 }
 
-// Closing row: the last connector lands on a green node that pops, then "Plan ready".
-export function ReadyRow({ summary, animate }: { summary: string; animate: boolean }) {
-  const pop = useSharedValue(animate ? 0.6 : 1);
-  useEffect(() => {
-    if (!animate) return;
-    pop.value = withSequence(
-      withTiming(1.06, { duration: 180, easing: Easing.out(Easing.cubic) }),
-      withTiming(1, { duration: 160, easing: Easing.inOut(Easing.cubic) }),
-    );
-  }, [animate, pop]);
-  const style = useAnimatedStyle(() => ({ transform: [{ scale: pop.value }] }));
-
+// Closing row: the last connector lands on a green node, then "Plan ready". It fades in; no pop.
+export function ReadyRow({
+  summary,
+  animate,
+  title = "Plan ready",
+}: {
+  summary: string;
+  animate: boolean;
+  title?: string;
+}) {
   return (
-    <Animated.View entering={animate ? FadeIn.duration(200) : undefined}>
-      <View accessible accessibilityLabel={`Plan ready. ${summary}`} className="flex-row gap-4">
-        <Animated.View style={style}>
-          <View className="h-11 w-11 items-center justify-center rounded-full bg-good">
-            <Sparkle size={20} color={colors.bg} weight="fill" />
-          </View>
-        </Animated.View>
+    <Animated.View entering={animate ? fadeIn() : undefined}>
+      <View accessible accessibilityLabel={`${title}. ${summary}`} className="flex-row gap-4">
+        <View className="h-11 w-11 items-center justify-center rounded-full bg-good">
+          <Sparkle size={20} color={colors.bg} weight="fill" />
+        </View>
         <View className="flex-1 gap-1 pt-1">
-          <Text className="font-display text-lg leading-6 text-ink">Plan ready</Text>
+          <Text className="font-display text-lg leading-6 text-ink">{title}</Text>
           <Text className="font-body text-sm leading-5 text-muted">{summary}</Text>
         </View>
       </View>

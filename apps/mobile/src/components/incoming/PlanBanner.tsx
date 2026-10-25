@@ -5,6 +5,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { AvatarStack, Button } from "@/components/ui";
 import type { Member } from "@/mocks/types";
 import { colors } from "@/theme";
+import { DURATION, EASE_OUT } from "@/theme/motion";
 
 type Props = {
   title: string; // "Planning Denver with Sam?"
@@ -21,8 +22,8 @@ export function PlanBanner({ title, body, members, onPlan, onDismiss }: Props) {
 
   return (
     <Animated.View
-      entering={SlideInUp.duration(320)}
-      exiting={SlideOutUp.duration(220)}
+      entering={SlideInUp.duration(DURATION.slow).easing(EASE_OUT)}
+      exiting={SlideOutUp.duration(DURATION.slow).easing(EASE_OUT)}
       style={{
         position: "absolute",
         left: 12,

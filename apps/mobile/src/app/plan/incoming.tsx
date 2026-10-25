@@ -11,14 +11,15 @@ import {
   Text,
   View,
 } from "react-native";
-import Animated, { FadeIn, useReducedMotion } from "react-native-reanimated";
+import Animated, { useReducedMotion } from "react-native-reanimated";
 import { ChatBubble } from "@/components/incoming/ChatBubble";
 import { PlanBanner } from "@/components/incoming/PlanBanner";
 import { TypingIndicator } from "@/components/incoming/TypingIndicator";
 import { AvatarStack, Screen } from "@/components/ui";
-import { chat, members, trip } from "@/mocks";
+import { brief, chat, members, triggerMessageId } from "@/mocks";
 import type { Member } from "@/mocks/types";
 import { colors } from "@/theme";
+import { fadeIn } from "@/theme/motion";
 
 const FIRST_MESSAGE_MS = 600;
 const MESSAGE_GAP_MS = 700;
@@ -32,15 +33,13 @@ function memberFor(id: string): Member {
 
 const friends = members.filter((m) => !m.isYou);
 
-// MOCK: who to name in the popup, guessed from whoever first mentioned the destination
-// ("denver??" -> Sam). The real detector returns the name with the plan.
-const city = trip.destination.city;
-const leadId =
-  chat.find((m) => m.text.toLowerCase().includes(city.toLowerCase()))?.from ?? friends[0]?.id;
-const lead = memberFor(leadId ?? "");
-
-const bannerTitle = `Planning ${city} with ${lead.name}?`;
-const bannerBody = `Huddle spotted a trip in ${trip.sourceChat.name}`;
+// The chat never names a city, so the popup doesn't either: Huddle suggests a few places next
+// and the group picks. The body quotes the message that triggered it, as proof.
+const trigger = chat.find((m) => m.id === triggerMessageId) ?? chat[chat.length - 1];
+const bannerTitle = `Planning a trip with ${brief.sourceChat.name}?`;
+const bannerBody = trigger
+  ? `“${trigger.text}” — ${memberFor(trigger.from).name}`
+  : `Huddle spotted a trip in ${brief.sourceChat.name}`;
 
 // Step 1 of the demo: the group chat fills up, then Huddle's heads-up banner drops in.
 // MOCK: messages come from mocks/chat; on the phone the real ones come from the notification
@@ -107,7 +106,7 @@ export default function Incoming() {
               <Plus size={20} color={colors.muted} />
             </View>
             <View className="h-11 flex-1 justify-center rounded-full border border-line bg-surface px-4">
-              <Text className="font-body text-sm text-faint">Message {trip.sourceChat.name}</Text>
+              <Text className="font-body text-sm text-faint">Message {brief.sourceChat.name}</Text>
             </View>
             <View className="h-11 w-11 items-center justify-center rounded-full bg-raised">
               <PaperPlaneTilt size={20} color={colors.faint} />
@@ -126,7 +125,7 @@ export default function Incoming() {
           </Pressable>
           <AvatarStack members={friends} size="sm" max={3} />
           <View className="flex-1">
-            <Text className="font-display text-lg leading-6 text-ink">{trip.sourceChat.name}</Text>
+            <Text className="font-display text-lg leading-6 text-ink">{brief.sourceChat.name}</Text>
             <Text className="font-body text-xs text-muted" numberOfLines={1}>
               {friends.map((m) => m.name).join(", ")}, you
             </Text>
@@ -152,7 +151,7 @@ export default function Incoming() {
           {typing ? <TypingIndicator key={typing.id} member={memberFor(typing.from)} /> : null}
 
           {banner === "dismissed" ? (
-            <Animated.View entering={FadeIn.duration(250)} style={{ alignItems: "center" }}>
+            <Animated.View entering={fadeIn()} style={{ alignItems: "center" }}>
               <Pressable
                 accessibilityRole="button"
                 accessibilityLabel="Huddle spotted a plan. Review it."
