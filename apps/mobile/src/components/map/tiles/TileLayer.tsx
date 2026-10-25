@@ -1,36 +1,34 @@
 import { Image } from "expo-image";
-import { memo, useMemo } from "react";
+import { memo, useMemo, useState } from "react";
 import { View } from "react-native";
 import { colors } from "@/theme";
 import type { Projection, Size } from "../projection";
 
 // Esri's "Dark Gray Canvas" raster tiles (OpenStreetMap + HERE/Garmin data), no API key.
-// CARTO Dark Matter was the first pick, but it now serves an "API key required" image to
-// keyless requests. Esri splits the map in two: streets (base) and place names (reference).
-// Attribution is required wherever these show.
+// Esri splits the map in two: streets (base) and place names (reference).
+// Attribution (see Attribution.tsx) is required wherever these show.
 const ESRI = "https://server.arcgisonline.com/ArcGIS/rest/services/Canvas";
 type Layer = {
   id: string;
   url: (z: number, x: number, y: number) => string;
-  // Draw this layer's tiles from one zoom deeper, at half size, so 256px tiles stay sharp
-  // on high-density phone screens. Only for the base: deeper labels would be tiny.
-  sharpen: boolean;
+  tileZoom: (fitZoom: number) => number;
 };
-const LAYERS: Layer[] = [
+const MAX_TILE_ZOOM = 16; // Dark Gray Canvas stops here
+export const LAYERS: Layer[] = [
   {
     id: "base",
     url: (z, x, y) => `${ESRI}/World_Dark_Gray_Base/MapServer/tile/${z}/${y}/${x}`,
-    sharpen: true,
+    // One zoom deeper than the fit, so each 256px tile shows at 128-256 dp: sharp on phone
+    // screens, and the tile count stays steady (~10-30) as the fit zoom changes.
+    tileZoom: (fit) => Math.floor(fit) + 1,
   },
   {
     id: "labels",
     url: (z, x, y) => `${ESRI}/World_Dark_Gray_Reference/MapServer/tile/${z}/${y}/${x}`,
-    sharpen: false,
+    // Nearest whole zoom, so place names stay close to their designed size.
+    tileZoom: (fit) => Math.round(fit),
   },
 ];
-const MAX_TILE_ZOOM = 16; // Dark Gray Canvas stops here
-
-export const TILE_ATTRIBUTION = "Esri, HERE, Garmin, © OpenStreetMap contributors";
 
 // Esri's gray is lighter than the app; this warm wash pulls it toward `colors.bg` so the pins pop.
 const SHADE_OPACITY = 0.5;
@@ -40,18 +38,17 @@ const LAND = "#535355";
 
 type Tile = { key: string; url: string; left: number; top: number; size: number };
 
-// Which tiles cover the screen, and where each one goes. Tiles come at whole zooms, so for a
-// fractional fit zoom we take a nearby whole zoom and scale its tiles to match.
-export function visibleTiles(proj: Projection, size: Size, layer: Layer): Tile[] {
-  const z = Math.min(MAX_TILE_ZOOM, Math.max(0, Math.round(proj.zoom) + (layer.sharpen ? 1 : 0)));
+// Which tiles cover the screen (plus `pad` px around it), and where each one goes.
+export function visibleTiles(proj: Projection, size: Size, layer: Layer, pad = 0): Tile[] {
+  const z = Math.min(MAX_TILE_ZOOM, Math.max(0, layer.tileZoom(proj.zoom)));
   const n = 2 ** z;
   // Screen edge -> world -> tile index.
   const toTileX = (sx: number) => (proj.center.x + (sx - proj.anchor.x) / proj.scale) * n;
   const toTileY = (sy: number) => (proj.center.y + (sy - proj.anchor.y) / proj.scale) * n;
-  const x0 = Math.floor(toTileX(0));
-  const x1 = Math.floor(toTileX(size.width));
-  const y0 = Math.max(0, Math.floor(toTileY(0)));
-  const y1 = Math.min(n - 1, Math.floor(toTileY(size.height)));
+  const x0 = Math.floor(toTileX(-pad));
+  const x1 = Math.floor(toTileX(size.width + pad));
+  const y0 = Math.max(0, Math.floor(toTileY(-pad)));
+  const y1 = Math.min(n - 1, Math.floor(toTileY(size.height + pad)));
   // Screen position of a tile edge. Rounding edges (not sizes) keeps neighbors seamless.
   const edgeX = (tx: number) => Math.round(proj.anchor.x + (tx / n - proj.center.x) * proj.scale);
   const edgeY = (ty: number) => Math.round(proj.anchor.y + (ty / n - proj.center.y) * proj.scale);
@@ -74,8 +71,8 @@ export function visibleTiles(proj: Projection, size: Size, layer: Layer): Tile[]
   return tiles;
 }
 
-// Real streets under the pins. Plain absolutely positioned images (~25 for a phone-sized
-// map), cached by expo-image, so it's cheap to render.
+// Real streets under the pins. Plain absolutely positioned images (~15-40 for a phone-sized
+// map, both layers), cached by expo-image, so it's cheap to render.
 export const TileLayer = memo(function TileLayer({ proj, size }: { proj: Projection; size: Size }) {
   const [base, labels] = useMemo(
     () => LAYERS.map((layer) => visibleTiles(proj, size, layer)),
@@ -91,7 +88,7 @@ export const TileLayer = memo(function TileLayer({ proj, size }: { proj: Project
   return (
     <View pointerEvents="none" style={[fill, { backgroundColor: LAND }]}>
       {base.map((t) => (
-        <TileImage key={t.key} tile={t} />
+        <TileImage key={t.key} tile={t} fallback />
       ))}
       <View style={[fill, { backgroundColor: colors.bg, opacity: SHADE_OPACITY }]} />
       {labels.map((t) => (
@@ -101,7 +98,18 @@ export const TileLayer = memo(function TileLayer({ proj, size }: { proj: Project
   );
 });
 
-function TileImage({ tile }: { tile: Tile }) {
+// A base tile that fails (offline, bad Wi-Fi) becomes a faint street grid, so the map still
+// reads as a map and the pins on top keep working. Failed label tiles just stay empty.
+function TileImage({ tile, fallback = false }: { tile: Tile; fallback?: boolean }) {
+  const [failed, setFailed] = useState(false);
+  const box = {
+    position: "absolute" as const,
+    left: tile.left,
+    top: tile.top,
+    width: tile.size,
+    height: tile.size,
+  };
+  if (failed) return fallback ? <OfflineTile box={box} /> : null;
   return (
     <Image
       source={{ uri: tile.url }}
@@ -109,13 +117,46 @@ function TileImage({ tile }: { tile: Tile }) {
       contentFit="fill"
       transition={180}
       accessible={false}
-      style={{
-        position: "absolute",
-        left: tile.left,
-        top: tile.top,
-        width: tile.size,
-        height: tile.size,
-      }}
+      onError={() => setFailed(true)}
+      style={box}
     />
+  );
+}
+
+const GRID_LINES = [0.25, 0.5, 0.75];
+const GRID = "#6E6E70"; // lighter than LAND; the shade on top dims it to a quiet grid
+
+type Box = { position: "absolute"; left: number; top: number; width: number; height: number };
+
+function OfflineTile({ box }: { box: Box }) {
+  return (
+    <View style={box}>
+      {GRID_LINES.map((f) => (
+        <View
+          key={`h${f}`}
+          style={{
+            position: "absolute",
+            left: 0,
+            right: 0,
+            top: f * box.width,
+            height: 1,
+            backgroundColor: GRID,
+          }}
+        />
+      ))}
+      {GRID_LINES.map((f) => (
+        <View
+          key={`v${f}`}
+          style={{
+            position: "absolute",
+            top: 0,
+            bottom: 0,
+            left: f * box.width,
+            width: 1,
+            backgroundColor: GRID,
+          }}
+        />
+      ))}
+    </View>
   );
 }

@@ -1,12 +1,25 @@
 import { useMemo, useState } from "react";
-import { Pressable, Text, View } from "react-native";
+import { Pressable, View } from "react-native";
 import Svg, { Circle, G, Line } from "react-native-svg";
 import type { Member, Place } from "@/mocks/types";
 import { colors } from "@/theme";
 import { PlaceCallout } from "./PlaceCallout";
 import { PIN_SIZE, PlacePin } from "./PlacePin";
-import { fitProjection, type Insets, kmBetween, type Size, spreadPins } from "./projection";
-import { TILE_ATTRIBUTION, TileLayer } from "./tiles/TileLayer";
+import {
+  ATTRIBUTION_TOP,
+  corePlaceIds,
+  fitMap,
+  type Insets,
+  type Size,
+  spreadPins,
+  TOP_FADE,
+  withAttributionRoom,
+} from "./projection";
+import { Attribution } from "./tiles/Attribution";
+import { TileLayer } from "./tiles/TileLayer";
+
+// Call from an earlier screen (e.g. /plan/summary) to warm the tile cache before the map opens.
+export { prefetchMapTiles } from "./tiles/prefetch";
 
 type Props = {
   places: Place[]; // pins to show (already filtered)
@@ -23,19 +36,9 @@ type Props = {
   onDismiss?: () => void;
 };
 
-// Places farther than this from the middle of the group become edge pins pointing off-map,
-// so one far-away pick (Red Rocks) doesn't shrink the whole city to a corner.
-const CORE_RADIUS_KM = 12;
 const EDGE_MARGIN = 48;
-// Above this the callout would sit under the filter chips, so it flips below the pin.
-const CHIPS_HEIGHT = 56;
 
-function median(values: number[]) {
-  const s = [...values].sort((a, b) => a - b);
-  return s[Math.floor(s.length / 2)] ?? 0;
-}
-
-// Real streets from CARTO's OpenStreetMap tiles, fitted to the places, with our own pins on
+// Real streets from Esri's Dark Gray Canvas tiles, fitted to the places, with our own pins on
 // top. The same props would drive a react-native-maps <MapView> with <Marker>s later.
 export function MapCanvas({
   places,
@@ -44,28 +47,22 @@ export function MapCanvas({
   pickedIds,
   selectedId,
   onSelect,
-  insets,
+  insets: overlayInsets,
   revealed,
   onTogglePick,
   onOpenDetails,
   onDismiss,
 }: Props) {
   const [size, setSize] = useState<Size | null>(null);
+  // The overlays' room plus a strip under the top fade for the attribution, kept pin-free.
+  const insets = useMemo(() => withAttributionRoom(overlayInsets), [overlayInsets]);
 
-  const core = useMemo(() => {
-    const center = {
-      lat: median(boundsFrom.map((p) => p.lat)),
-      lng: median(boundsFrom.map((p) => p.lng)),
-    };
-    const near = boundsFrom.filter((p) => kmBetween(p, center) <= CORE_RADIUS_KM);
-    return new Set((near.length > 0 ? near : boundsFrom).map((p) => p.id));
-  }, [boundsFrom]);
+  const core = useMemo(() => corePlaceIds(boundsFrom), [boundsFrom]);
 
-  const proj = useMemo(() => {
-    if (!size) return null;
-    const fit = boundsFrom.filter((p) => core.has(p.id));
-    return fitProjection(fit.length > 0 ? fit : [{ lat: 39.7392, lng: -104.9903 }], size, insets);
-  }, [size, boundsFrom, core, insets]);
+  const proj = useMemo(
+    () => (size ? fitMap(boundsFrom, core, size, insets) : null),
+    [size, boundsFrom, core, insets],
+  );
 
   const pins = useMemo(() => {
     if (!proj || !size) return [];
@@ -155,6 +152,9 @@ export function MapCanvas({
         </Svg>
       ) : null}
 
+      {/* Required wherever the tiles show: just below the top fade, under the pins. */}
+      {size ? <Attribution top={ATTRIBUTION_TOP} maxWidth={size.width - 16} /> : null}
+
       {revealed
         ? pins.map((p, i) => (
             <PlacePin
@@ -191,21 +191,12 @@ export function MapCanvas({
           anchor={selectedPin.pos}
           pinRadius={(PIN_SIZE + 6) / 2}
           mapSize={size}
-          minTop={Math.min(CHIPS_HEIGHT, insets.top)}
+          safeTop={TOP_FADE}
+          safeBottom={size.height - insets.bottom}
           onToggle={() => onTogglePick?.(selectedPin.place.id)}
           onDetails={() => onOpenDetails?.(selectedPin.place.id)}
         />
       ) : null}
-
-      {/* Required wherever the tiles show. Tucked under the top overlay (filter chips), in the
-          strip above `insets.top` where pins never go. */}
-      <View
-        pointerEvents="none"
-        className="absolute right-0 px-2"
-        style={{ top: Math.max(4, insets.top - 34) }}
-      >
-        <Text className="font-body text-[9px] text-muted">{TILE_ATTRIBUTION}</Text>
-      </View>
     </View>
   );
 }

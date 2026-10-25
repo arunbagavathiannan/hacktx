@@ -1,4 +1,4 @@
-// Web Mercator projection, the same math slippy-map tiles use (OpenStreetMap, CARTO), so
+// Web Mercator projection, the same math slippy-map tiles use (Esri, OpenStreetMap), so
 // pins land on the right street of the basemap. Coordinates are "world" units in [0, 1]
 // at zoom 0; one tile covers 1 / 2^z of the world at zoom z.
 
@@ -8,7 +8,7 @@ export type LatLng = { lat: number; lng: number };
 
 export type Projection = {
   project: (lat: number, lng: number) => { x: number; y: number };
-  zoom: number; // fractional; tiles are drawn at the nearest whole zoom, scaled
+  zoom: number; // fractional; tiles come at whole zooms and are scaled to match
   scale: number; // screen px per world unit (256 * 2^zoom)
   center: { x: number; y: number }; // world coords at the screen anchor
   anchor: { x: number; y: number }; // screen px where `center` is drawn
@@ -65,6 +65,49 @@ export function fitProjection(points: LatLng[], size: Size, insets: Insets): Pro
       };
     },
   };
+}
+
+// Places farther than this from the middle of the group become edge pins pointing off-map,
+// so one far-away pick (Red Rocks) doesn't shrink the whole city to a corner.
+const CORE_RADIUS_KM = 12;
+const FALLBACK_CENTER = { lat: 39.7392, lng: -104.9903 }; // downtown Denver
+
+function median(values: number[]) {
+  const s = [...values].sort((a, b) => a - b);
+  return s[Math.floor(s.length / 2)] ?? 0;
+}
+
+// Ids of the places the map fits to (the ones near the middle of the group).
+export function corePlaceIds(places: Array<LatLng & { id: string }>) {
+  const center = { lat: median(places.map((p) => p.lat)), lng: median(places.map((p) => p.lng)) };
+  const near = places.filter((p) => kmBetween(p, center) <= CORE_RADIUS_KM);
+  return new Set((near.length > 0 ? near : places).map((p) => p.id));
+}
+
+// map.tsx fades the top of the map under the chips (a 72 px gradient). The tile attribution
+// sits right below that fade, and pins are kept clear of it so it's never covered.
+export const TOP_FADE = 72;
+export const ATTRIBUTION_TOP = TOP_FADE + 2;
+const ATTRIBUTION_HEIGHT = 20;
+const PIN_CLEARANCE = 26; // a selected pin's radius plus a little air
+
+export function withAttributionRoom(insets: Insets): Insets {
+  return {
+    ...insets,
+    top: Math.max(insets.top, ATTRIBUTION_TOP + ATTRIBUTION_HEIGHT + PIN_CLEARANCE),
+  };
+}
+
+// The map's view for these places: fit to the core ones. Shared by MapCanvas and the tile
+// prefetcher so both ask for the same tiles.
+export function fitMap(
+  places: Array<LatLng & { id: string }>,
+  core: Set<string>,
+  size: Size,
+  insets: Insets,
+) {
+  const fit = places.filter((p) => core.has(p.id));
+  return fitProjection(fit.length > 0 ? fit : [FALLBACK_CENTER], size, insets);
 }
 
 type Pin = { id: string; x: number; y: number };
