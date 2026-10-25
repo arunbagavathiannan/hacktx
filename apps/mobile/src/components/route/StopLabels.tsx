@@ -1,6 +1,7 @@
+import { useMemo } from "react";
 import { Text, View } from "react-native";
 import Animated, { FadeIn } from "react-native-reanimated";
-import type { GlobePoint, ScreenPoint } from "@/components/globe/GlobeScene";
+import type { GlobePoint, ScreenPoint, ScreenProjection } from "@/components/globe/GlobeScene";
 import { colors } from "@/theme";
 
 type Panel = {
@@ -11,8 +12,13 @@ type Panel = {
 
 type Props = Panel & {
   points: GlobePoint[];
-  screen: ScreenPoint[]; // same order as `points`, from the globe once it settles
+  projection: ScreenProjection; // from the globe once it settles; points in `points` order
 };
+
+// Above this many labels the exhaustive search (4^n) gets slow, so every label just takes
+// its first-choice side, with no collision checks. Routes in the app have 2-4 points.
+const MAX_SEARCHED = 6;
+const ARC_HIT_COST = 3; // per arc sample a label would cover
 
 const PILL_H = 26;
 const GAP = 11; // between the marker's middle and the pill
@@ -48,10 +54,14 @@ function wrapperStyle(box: Box) {
 }
 
 // Picks a side for every label at once: not on another label, a marker, or off the panel,
-// and otherwise on the side facing away from the rest of the route (so labels don't sit on
-// the arcs). Tries every combination; a route has a handful of stops.
-function layoutLabels(points: GlobePoint[], screen: ScreenPoint[], panel: Panel) {
+// covering as little of the arcs as it can, and otherwise on the side facing away from the
+// rest of the route. Tries every combination; a route has a handful of stops.
+function layoutLabels(points: GlobePoint[], projection: ScreenProjection, panel: Panel) {
   const { width, height, bottomInset } = panel;
+  const screen = projection.points;
+  const arcSamples = projection.arcs.flat().filter((s) => s.visible);
+  const inBox = (b: Box, s: ScreenPoint) =>
+    s.x > b.left - 2 && s.x < b.right + 2 && s.y > b.top - 2 && s.y < b.bottom + 2;
   const shown = points.flatMap((p, i) => {
     const s = screen[i];
     return s?.visible && (p.code || p.name) ? [{ i, s, w: estimateWidth(p) }] : [];
@@ -79,7 +89,11 @@ function layoutLabels(points: GlobePoint[], screen: ScreenPoint[], panel: Panel)
         box.top < 4 ||
         box.bottom > height - bottomInset;
       const onMarker = markers.some((m) => overlaps(m, box));
-      return { box, cost: rank + (outside ? 50 : 0) + (onMarker ? 50 : 0) };
+      const arcHits = arcSamples.filter((s) => inBox(box, s)).length;
+      return {
+        box,
+        cost: rank + (outside ? 50 : 0) + (onMarker ? 50 : 0) + arcHits * ARC_HIT_COST,
+      };
     });
   });
 
@@ -100,7 +114,7 @@ function layoutLabels(points: GlobePoint[], screen: ScreenPoint[], panel: Panel)
       chosen.pop();
     }
   };
-  if (options.length <= 6) search(0, 0);
+  if (options.length <= MAX_SEARCHED) search(0, 0);
 
   const out: Array<Box | null> = points.map(() => null);
   shown.forEach((l, n) => {
@@ -111,8 +125,13 @@ function layoutLabels(points: GlobePoint[], screen: ScreenPoint[], panel: Panel)
 
 // City + airport labels drawn over the route globe (plain RN text: sharp on a projector,
 // no textures in the GL scene).
-export function StopLabels({ points, screen, ...panel }: Props) {
-  const boxes = layoutLabels(points, screen, panel);
+export function StopLabels({ points, projection, width, height, bottomInset }: Props) {
+  // Only redo the search when the globe reports new positions or the panel changes, not on
+  // every RouteView render (a flight pick re-renders it).
+  const boxes = useMemo(
+    () => layoutLabels(points, projection, { width, height, bottomInset }),
+    [points, projection, width, height, bottomInset],
+  );
   return (
     <>
       {points.map((p, i) => {

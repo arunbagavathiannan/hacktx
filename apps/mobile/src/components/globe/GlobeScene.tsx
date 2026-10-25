@@ -11,6 +11,8 @@ export type GlobePoint = LatLng & { kind: "origin" | "stop"; code?: string; name
 export type GlobeArc = { from: LatLng; to: LatLng; mode?: "fly" | "drive" };
 // Where a point lands on the canvas, in canvas pixels (dp on native).
 export type ScreenPoint = { x: number; y: number; visible: boolean };
+// The settled overview on screen: each of `points`, and samples along each arc.
+export type ScreenProjection = { points: ScreenPoint[]; arcs: ScreenPoint[][] };
 
 export type GlobeProps = {
   focus: LatLng; // where the camera ends up looking (the destination, or the route's middle)
@@ -27,9 +29,9 @@ export type GlobeProps = {
   // Overview only. Dots that travel along the arcs and rings that pulse on the stops. Pass
   // false for reduced motion.
   ambient?: boolean;
-  // Overview only. Screen positions of `points` once the camera settles (and again on a
-  // resize), so the caller can draw crisp labels on top of the canvas.
-  onProjectPoints?: (points: ScreenPoint[]) => void;
+  // Overview only. Screen positions of `points` and the arcs once the camera settles (and
+  // again on a resize), so the caller can draw crisp labels on top of the canvas.
+  onProject?: (projection: ScreenProjection) => void;
 };
 
 // Shared three.js scene for Globe.web.tsx and Globe.native.tsx. Low-poly, no textures:
@@ -58,15 +60,16 @@ const OVERVIEW = {
   tilt: 22, // degrees the view leans north from straight down: some depth, no wall
   // Stops and arc tops must land inside this box (normalized device coords). Leaves room
   // for labels around the stops, the legend at the bottom, and land around the route.
-  fitX: 0.48,
-  fitY: 0.38,
+  fitX: 0.4,
+  fitY: 0.32,
   minAlt: 0.3, // a one-city "route" doesn't zoom into the street
   maxAlt: 3,
   // Sizes in screen pixels, turned into world units at the route's depth.
   arcPx: 2.4,
   glowPx: 7,
   stopPx: 6,
-  originPx: 5.5,
+  originPx: 7,
+  homeHole: 0.5, // the home ring's hole, as a share of its radius
   outlinePx: 2,
 };
 
@@ -273,6 +276,15 @@ function useStars() {
 const lerp = (a: number, b: number, t: number) => a + (b - a) * t;
 const clamp01 = (t: number) => Math.min(1, Math.max(0, t));
 
+// Show the first `share` of a tube (whole quads only).
+function drawShare(g: THREE.BufferGeometry, share: number) {
+  const total = g.index?.count ?? 0;
+  g.setDrawRange(0, Math.floor((total * share) / 6) * 6);
+}
+
+// Samples per arc in the screen projection (label placement treats them as obstacles).
+const ARC_SAMPLES = 32;
+
 // A ring lying flat on the surface that pulses outward from a stop.
 function PulseRing({
   at,
@@ -314,6 +326,13 @@ function PulseRing({
   );
 }
 
+// True when `at` (on or just above the surface) is on the hemisphere facing the camera.
+// Overview markers and comets skip the depth test so arcs can't bury them; this keeps
+// anything on the far side from showing through the globe instead.
+const scratch = new THREE.Vector3();
+const facesCamera = (at: THREE.Vector3, camera: THREE.Camera) =>
+  at.dot(scratch.copy(camera.position).sub(at)) > 0;
+
 // A flat disc on the surface, facing out: overview stop markers (drawn over the arcs).
 function Disc({
   at,
@@ -330,6 +349,9 @@ function Disc({
   useEffect(() => {
     disc.current?.lookAt(at.clone().multiplyScalar(2));
   }, [at]);
+  useFrame(({ camera }) => {
+    if (disc.current) disc.current.visible = facesCamera(at, camera);
+  });
   return (
     <mesh ref={disc} position={at} renderOrder={order}>
       <circleGeometry args={[radius, 32]} />
@@ -358,7 +380,7 @@ function Comet({
   const halo = useRef<THREE.MeshBasicMaterial>(null);
   const t = useRef(-delay);
 
-  useFrame((_, delta) => {
+  useFrame(({ camera }, delta) => {
     const g = group.current;
     if (!g) return;
     if (!live.current) {
@@ -372,9 +394,8 @@ function Comet({
       g.visible = false;
       return;
     }
-    g.visible = true;
-    const eased = easeInOutCubic(u);
-    g.position.copy(curve.getPointAt(eased));
+    curve.getPointAt(easeInOutCubic(u), g.position);
+    g.visible = facesCamera(g.position, camera);
     const fade = Math.sin(Math.PI * u);
     g.scale.setScalar(0.6 + 0.4 * fade);
     if (halo.current) halo.current.opacity = 0.45 * fade;
@@ -412,7 +433,7 @@ export function GlobeScene({
   onDone,
   onFirstFrame,
   ambient = true,
-  onProjectPoints,
+  onProject,
 }: GlobeProps) {
   const camera = useThree((s) => s.camera) as THREE.PerspectiveCamera;
   const dpr = useThree((s) => s.viewport.dpr);
@@ -452,9 +473,12 @@ export function GlobeScene({
   const finished = useRef(false);
   const settled = useRef(false);
   const target = useRef(new THREE.Vector3());
-  const projected = useRef<{ key: string; points: GlobePoint[] } | null>(null);
-  const onProjectRef = useRef(onProjectPoints);
-  onProjectRef.current = onProjectPoints;
+  const fullyDrawn = useRef<typeof tubes | null>(null);
+  const projected = useRef<{ key: string; points: GlobePoint[]; curves: typeof curves } | null>(
+    null,
+  );
+  const onProjectRef = useRef(onProject);
+  onProjectRef.current = onProject;
 
   const focusXYZ = useMemo(() => toVec(focus, 1.004), [focus]);
   const markers = useMemo(
@@ -507,37 +531,44 @@ export function GlobeScene({
       camera.lookAt(target.current);
     }
 
-    // Draw the legs one after another inside the arc window.
-    const win = CAMERA[variant];
-    const drawn = clamp01((progress - win.arcFrom) / win.arcSpan) * tubes.length;
-    tubes.forEach((t, i) => {
-      const share = clamp01(drawn - i);
-      for (const g of t.glow ? [t.core, t.glow] : [t.core]) {
-        const total = g.index?.count ?? 0;
-        g.setDrawRange(0, Math.floor((total * share) / 6) * 6);
+    // Draw the legs one after another inside the arc window. Once every leg is fully drawn
+    // (for this set of tubes), stop touching the draw ranges.
+    if (fullyDrawn.current !== tubes) {
+      const win = CAMERA[variant];
+      const drawn = clamp01((progress - win.arcFrom) / win.arcSpan) * tubes.length;
+      for (let i = 0; i < tubes.length; i++) {
+        const t = tubes[i];
+        if (!t) continue;
+        const share = clamp01(drawn - i);
+        drawShare(t.core, share);
+        if (t.glow) drawShare(t.glow, share);
       }
-    });
+      if (drawn >= tubes.length) fullyDrawn.current = tubes;
+    }
     settled.current = progress >= 1;
 
-    // Report where the points landed, once settled (and again after a resize or new points).
+    // Report where the points and arcs landed, once settled (and again after a resize or
+    // new points).
     const report = onProjectRef.current;
     if (overview && report && progress >= 1) {
       const key = `${width}x${height}`;
-      if (projected.current?.key !== key || projected.current.points !== points) {
-        projected.current = { key, points };
+      const last = projected.current;
+      if (last?.key !== key || last.points !== points || last.curves !== curves) {
+        projected.current = { key, points, curves };
         camera.updateMatrixWorld();
-        const v = new THREE.Vector3();
-        report(
-          markers.map((m) => {
-            const facing = m.at.dot(v.copy(camera.position).sub(m.at)) > 0;
-            v.copy(m.at).project(camera);
-            return {
-              x: ((v.x + 1) / 2) * width,
-              y: ((1 - v.y) / 2) * height,
-              visible: facing && Math.abs(v.x) <= 1 && Math.abs(v.y) <= 1,
-            };
-          }),
-        );
+        const toScreen = (at: THREE.Vector3): ScreenPoint => {
+          const facing = facesCamera(at, camera);
+          const v = at.clone().project(camera);
+          return {
+            x: ((v.x + 1) / 2) * width,
+            y: ((1 - v.y) / 2) * height,
+            visible: facing && Math.abs(v.x) <= 1 && Math.abs(v.y) <= 1,
+          };
+        };
+        report({
+          points: markers.map((m) => toScreen(m.at)),
+          arcs: curves.map((c) => c.getSpacedPoints(ARC_SAMPLES).map(toScreen)),
+        });
       }
     }
 
@@ -616,6 +647,10 @@ export function GlobeScene({
                   color={m.kind === "origin" ? colors.gold : colors.accent}
                   order={8}
                 />
+                {m.kind === "origin" ? (
+                  // Home is a ring, not a dot: shape, not just gold vs orange, tells it apart.
+                  <Disc at={m.at} radius={r * OVERVIEW.homeHole} color={colors.bg} order={9} />
+                ) : null}
               </group>
             );
           })

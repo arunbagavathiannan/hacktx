@@ -2,7 +2,7 @@ import { AirplaneTilt, Car } from "phosphor-react-native";
 import { useMemo, useState } from "react";
 import { ScrollView, Text, View } from "react-native";
 import Animated, { FadeIn, useReducedMotion } from "react-native-reanimated";
-import { DRIVE_ARC_COLOR, type ScreenPoint } from "@/components/globe/GlobeScene";
+import { DRIVE_ARC_COLOR, type ScreenProjection } from "@/components/globe/GlobeScene";
 import { SafeGlobe } from "@/components/globe/SafeGlobe";
 import { FlightsRow } from "@/components/map/FlightsRow";
 import { groupSize } from "@/lib/pricing";
@@ -41,6 +41,20 @@ function legDay(trip: Trip, leg: LegPlan) {
   return trip.stops.find((s) => s.city === leg.leg.from)?.depart ?? trip.dates.end;
 }
 
+// "Route map: Austin to Denver by plane, Denver to Austin included in the round-trip fare"
+function routeSummary(legs: LegPlan[]) {
+  const parts = legs.map((l) => {
+    const how =
+      l.mode === "drive"
+        ? "by car"
+        : l.options.length > 0
+          ? "by plane"
+          : "included in the round-trip fare";
+    return `${l.leg.from} to ${l.leg.to} ${how}`;
+  });
+  return `Route map: ${parts.join(", ")}`;
+}
+
 // Route tab of the map screen: the globe with every stop and leg, then each leg with its
 // own single-select flight picker (or the drive card when the group drives it).
 export function RouteView({
@@ -54,8 +68,8 @@ export function RouteView({
   const [globeFailed, setGlobeFailed] = useState(false);
   const reduceMotion = useReducedMotion();
   const [panelWidth, setPanelWidth] = useState(0);
-  // Where the stops landed on screen, reported by the globe once it settles.
-  const [screen, setScreen] = useState<ScreenPoint[] | null>(null);
+  // Where the stops and arcs landed on screen, reported by the globe once it settles.
+  const [projection, setProjection] = useState<ScreenProjection | null>(null);
   // Memoized on the legs' modes so the globe doesn't rebuild when a flight is picked.
   const modes = legs.map((l) => l.mode).join(",");
   // biome-ignore lint/correctness/useExhaustiveDependencies: rebuild only when modes change
@@ -69,6 +83,10 @@ export function RouteView({
           style={{ height: GLOBE_HEIGHT }}
           className="border-b border-line"
           onLayout={(e) => setPanelWidth(e.nativeEvent.layout.width)}
+          // One spoken summary instead of TalkBack reading the labels and legend piece by piece.
+          accessible
+          accessibilityRole="image"
+          accessibilityLabel={routeSummary(legs)}
         >
           <SafeGlobe
             variant="overview"
@@ -78,14 +96,14 @@ export function RouteView({
             durationMs={1600}
             frozenAt={globeFrozenAt}
             ambient={!reduceMotion}
-            onProjectPoints={setScreen}
+            onProject={setProjection}
             onDone={onGlobeSettled}
             onFail={() => setGlobeFailed(true)}
           />
-          {screen && panelWidth > 0 ? (
+          {projection && panelWidth > 0 ? (
             <StopLabels
               points={globe.points}
-              screen={screen}
+              projection={projection}
               width={panelWidth}
               height={GLOBE_HEIGHT}
               bottomInset={LEGEND_INSET}
@@ -95,7 +113,7 @@ export function RouteView({
             pointerEvents="none"
             className="absolute bottom-3 left-4 flex-row items-center gap-3.5 rounded-full border border-line bg-bg/85 px-3.5 py-1.5"
           >
-            <LegendDot color={colors.gold} label="Home" />
+            <LegendDot color={colors.gold} label="Home" ring />
             <LegendDot color={colors.accent} label={trip.stops.length > 1 ? "Stops" : "Stop"} />
             {legs.some((l) => l.mode === "fly") ? (
               <LegendLine color={colors.accent} label="Flight" />
@@ -157,10 +175,17 @@ export function RouteView({
   );
 }
 
-function LegendDot({ color, label }: { color: string; label: string }) {
+// `ring` matches the globe's home marker (a ring, not a dot).
+function LegendDot({ color, label, ring }: { color: string; label: string; ring?: boolean }) {
   return (
     <View className="flex-row items-center gap-1.5">
-      <View style={{ width: 9, height: 9, borderRadius: 5, backgroundColor: color }} />
+      <View
+        style={
+          ring
+            ? { width: 11, height: 11, borderRadius: 6, borderWidth: 3, borderColor: color }
+            : { width: 9, height: 9, borderRadius: 5, backgroundColor: color }
+        }
+      />
       <Text className="font-body-semibold text-[13px] text-ink">{label}</Text>
     </View>
   );
