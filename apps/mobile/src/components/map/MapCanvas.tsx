@@ -1,18 +1,25 @@
 import { useMemo, useState } from "react";
-import { View } from "react-native";
-import Svg, { Circle, Ellipse, G, Line, Polyline, Rect, Text as SvgText } from "react-native-svg";
+import { Pressable, View } from "react-native";
+import Svg, { Circle, G, Line } from "react-native-svg";
 import type { Member, Place } from "@/mocks/types";
 import { colors } from "@/theme";
-import { neighborhoods, parks, rivers, roads } from "./denverBasemap";
-import { PlacePin } from "./PlacePin";
+import { PlaceCallout } from "./PlaceCallout";
+import { PIN_SIZE, PlacePin } from "./PlacePin";
 import {
-  fitProjection,
+  ATTRIBUTION_TOP,
+  corePlaceIds,
+  fitMap,
   type Insets,
-  kmBetween,
-  type Projection,
   type Size,
   spreadPins,
+  TOP_FADE,
+  withAttributionRoom,
 } from "./projection";
+import { Attribution } from "./tiles/Attribution";
+import { TileLayer } from "./tiles/TileLayer";
+
+// Call from an earlier screen (e.g. /plan/summary) to warm the tile cache before the map opens.
+export { prefetchMapTiles } from "./tiles/prefetch";
 
 type Props = {
   places: Place[]; // pins to show (already filtered)
@@ -23,199 +30,16 @@ type Props = {
   onSelect: (id: string) => void;
   insets: Insets; // room for overlays (chips on top, flights row at the bottom)
   revealed: boolean; // pins drop in once the globe hands off
+  // The selected pin shows a small callout with these actions. Tapping empty map dismisses it.
+  onTogglePick?: (id: string) => void;
+  onOpenDetails?: (id: string) => void;
+  onDismiss?: () => void;
 };
 
-// Places farther than this from the middle of the group become edge pins pointing off-map,
-// so one far-away pick (Red Rocks) doesn't shrink the whole city to a corner.
-const CORE_RADIUS_KM = 12;
 const EDGE_MARGIN = 48;
 
-const map = {
-  land: "#12100E",
-  grid: "#1C1916",
-  park: "#15201A",
-  water: "#17262C",
-  highway: "#3B342D",
-  highwayCasing: "#0B0A09",
-  major: "#28231F",
-  label: colors.faint,
-};
-
-function median(values: number[]) {
-  const s = [...values].sort((a, b) => a - b);
-  return s[Math.floor(s.length / 2)] ?? 0;
-}
-
-const toPoints = (proj: Projection, line: Array<[number, number]>) =>
-  line
-    .map(([lat, lng]) => {
-      const p = proj.project(lat, lng);
-      return `${p.x.toFixed(1)},${p.y.toFixed(1)}`;
-    })
-    .join(" ");
-
-function Basemap({ proj, size }: { proj: Projection; size: Size }) {
-  const grid = useMemo(() => {
-    // Keyed by row/column: the first row and first column start at the same corner, so
-    // coordinate-based keys collided (a red-screen duplicate-key error on Android).
-    const lines: Array<{ id: string; x1: number; y1: number; x2: number; y2: number }> = [];
-    for (let i = 0, lat = 39.6; lat <= 39.9; i++, lat += 0.0075) {
-      const a = proj.project(lat, -105.3);
-      const b = proj.project(lat, -104.8);
-      lines.push({ id: `row-${i}`, x1: a.x, y1: a.y, x2: b.x, y2: b.y });
-    }
-    for (let i = 0, lng = -105.3; lng <= -104.8; i++, lng += 0.0075) {
-      const a = proj.project(39.6, lng);
-      const b = proj.project(39.9, lng);
-      lines.push({ id: `col-${i}`, x1: a.x, y1: a.y, x2: b.x, y2: b.y });
-    }
-    return lines;
-  }, [proj]);
-
-  return (
-    <>
-      <Rect x={0} y={0} width={size.width} height={size.height} fill={map.land} />
-      <G>
-        {grid.map(({ id, ...l }) => (
-          <Line key={id} {...l} stroke={map.grid} strokeWidth={1} />
-        ))}
-      </G>
-
-      {parks.map((p) => {
-        const c = proj.project(p.lat, p.lng);
-        const rx = proj.project(p.lat, p.lng + p.rLng).x - c.x;
-        const ry = c.y - proj.project(p.lat + p.rLat, p.lng).y;
-        return <Ellipse key={p.name} cx={c.x} cy={c.y} rx={rx} ry={ry} fill={map.park} />;
-      })}
-
-      {rivers.map((r) => (
-        <Polyline
-          key={r.name}
-          points={toPoints(proj, r.points)}
-          fill="none"
-          stroke={map.water}
-          strokeWidth={r.width}
-          strokeLinecap="round"
-          strokeLinejoin="round"
-        />
-      ))}
-
-      {roads
-        .filter((r) => r.kind === "major")
-        .map((r) => (
-          <Polyline
-            key={r.name}
-            points={toPoints(proj, r.points)}
-            fill="none"
-            stroke={map.major}
-            strokeWidth={2}
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          />
-        ))}
-
-      {roads
-        .filter((r) => r.kind === "highway")
-        .map((r) => (
-          <G key={r.name}>
-            <Polyline
-              points={toPoints(proj, r.points)}
-              fill="none"
-              stroke={map.highwayCasing}
-              strokeWidth={7}
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            />
-            <Polyline
-              points={toPoints(proj, r.points)}
-              fill="none"
-              stroke={map.highway}
-              strokeWidth={4}
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            />
-          </G>
-        ))}
-
-      {neighborhoods.map((n) => {
-        const p = proj.project(n.lat, n.lng);
-        return (
-          <SvgText
-            key={n.name}
-            x={p.x}
-            y={p.y}
-            fill={map.label}
-            fontSize={9}
-            fontFamily="Manrope_700Bold"
-            letterSpacing={2}
-            textAnchor="middle"
-            opacity={0.8}
-          >
-            {n.name}
-          </SvgText>
-        );
-      })}
-
-      {roads.map((r) => {
-        if (r.labelAt === undefined) return null;
-        const a = r.points[r.labelAt];
-        const b = r.points[r.labelAt + 1] ?? a;
-        const pa = proj.project(a[0], a[1]);
-        const pb = proj.project(b[0], b[1]);
-        const x = (pa.x + pb.x) / 2;
-        const y = (pa.y + pb.y) / 2;
-
-        if (r.kind === "highway") {
-          return (
-            <G key={`${r.name}-label`}>
-              <Rect
-                x={x - 15}
-                y={y - 8}
-                width={30}
-                height={16}
-                rx={5}
-                fill={colors.raised}
-                stroke={colors.line}
-              />
-              <SvgText
-                x={x}
-                y={y + 3.5}
-                fill={colors.muted}
-                fontSize={9}
-                fontFamily="Manrope_700Bold"
-                textAnchor="middle"
-              >
-                {r.name}
-              </SvgText>
-            </G>
-          );
-        }
-
-        let angle = (Math.atan2(pb.y - pa.y, pb.x - pa.x) * 180) / Math.PI;
-        if (angle > 90) angle -= 180;
-        if (angle < -90) angle += 180;
-        return (
-          <SvgText
-            key={`${r.name}-label`}
-            x={x}
-            y={y - 4}
-            fill={map.label}
-            fontSize={9}
-            fontFamily="Manrope_600SemiBold"
-            textAnchor="middle"
-            rotation={angle}
-            origin={`${x}, ${y}`}
-          >
-            {r.name}
-          </SvgText>
-        );
-      })}
-    </>
-  );
-}
-
-// Styled Denver map stand-in until we have a Google Maps key. Same props would drive a
-// react-native-maps <MapView> with <Marker>s, so screens don't change when it's swapped.
+// Real streets from Esri's Dark Gray Canvas tiles, fitted to the places, with our own pins on
+// top. The same props would drive a react-native-maps <MapView> with <Marker>s later.
 export function MapCanvas({
   places,
   boundsFrom,
@@ -223,25 +47,22 @@ export function MapCanvas({
   pickedIds,
   selectedId,
   onSelect,
-  insets,
+  insets: overlayInsets,
   revealed,
+  onTogglePick,
+  onOpenDetails,
+  onDismiss,
 }: Props) {
   const [size, setSize] = useState<Size | null>(null);
+  // The overlays' room plus a strip under the top fade for the attribution, kept pin-free.
+  const insets = useMemo(() => withAttributionRoom(overlayInsets), [overlayInsets]);
 
-  const core = useMemo(() => {
-    const center = {
-      lat: median(boundsFrom.map((p) => p.lat)),
-      lng: median(boundsFrom.map((p) => p.lng)),
-    };
-    const near = boundsFrom.filter((p) => kmBetween(p, center) <= CORE_RADIUS_KM);
-    return new Set((near.length > 0 ? near : boundsFrom).map((p) => p.id));
-  }, [boundsFrom]);
+  const core = useMemo(() => corePlaceIds(boundsFrom), [boundsFrom]);
 
-  const proj = useMemo(() => {
-    if (!size) return null;
-    const fit = boundsFrom.filter((p) => core.has(p.id));
-    return fitProjection(fit.length > 0 ? fit : [{ lat: 39.7392, lng: -104.9903 }], size, insets);
-  }, [size, boundsFrom, core, insets]);
+  const proj = useMemo(
+    () => (size ? fitMap(boundsFrom, core, size, insets) : null),
+    [size, boundsFrom, core, insets],
+  );
 
   const pins = useMemo(() => {
     if (!proj || !size) return [];
@@ -280,6 +101,9 @@ export function MapCanvas({
   }, [proj, size, places, core, insets]);
 
   const byId = useMemo(() => new Map(members.map((m) => [m.id, m])), [members]);
+  const you = members.find((m) => m.isYou);
+  const selectedPin = selectedId ? pins.find((p) => p.place.id === selectedId) : undefined;
+  const selectedPicked = selectedPin ? pickedIds.includes(selectedPin.place.id) : false;
 
   return (
     <View
@@ -289,33 +113,47 @@ export function MapCanvas({
         if (!size || size.width !== width || size.height !== height) setSize({ width, height });
       }}
     >
-      {size && proj ? (
-        <Svg width={size.width} height={size.height} style={{ position: "absolute" }}>
-          <Basemap proj={proj} size={size} />
+      {size && proj ? <TileLayer proj={proj} size={size} /> : null}
+
+      {/* Empty map: tapping it closes the callout. Pins and the callout sit above this. */}
+      <Pressable
+        accessible={false}
+        onPress={onDismiss}
+        style={{ position: "absolute", left: 0, top: 0, right: 0, bottom: 0 }}
+      />
+
+      {size && proj && revealed ? (
+        <Svg
+          width={size.width}
+          height={size.height}
+          style={{ position: "absolute" }}
+          pointerEvents="none"
+        >
           {/* Leader lines from nudged pins back to the real spot. */}
-          {revealed
-            ? pins.map((p) => {
-                if (p.offMapAngle !== undefined) return null;
-                const moved = Math.hypot(p.pos.x - p.at.x, p.pos.y - p.at.y) > 6;
-                if (!moved) return null;
-                return (
-                  <G key={`${p.place.id}-leader`}>
-                    <Line
-                      x1={p.at.x}
-                      y1={p.at.y}
-                      x2={p.pos.x}
-                      y2={p.pos.y}
-                      stroke={colors.muted}
-                      strokeOpacity={0.5}
-                      strokeWidth={1}
-                    />
-                    <Circle cx={p.at.x} cy={p.at.y} r={2.5} fill={colors.muted} />
-                  </G>
-                );
-              })
-            : null}
+          {pins.map((p) => {
+            if (p.offMapAngle !== undefined) return null;
+            const moved = Math.hypot(p.pos.x - p.at.x, p.pos.y - p.at.y) > 6;
+            if (!moved) return null;
+            return (
+              <G key={`${p.place.id}-leader`}>
+                <Line
+                  x1={p.at.x}
+                  y1={p.at.y}
+                  x2={p.pos.x}
+                  y2={p.pos.y}
+                  stroke={colors.ink}
+                  strokeOpacity={0.55}
+                  strokeWidth={1}
+                />
+                <Circle cx={p.at.x} cy={p.at.y} r={2.5} fill={colors.ink} />
+              </G>
+            );
+          })}
         </Svg>
       ) : null}
+
+      {/* Required wherever the tiles show: just below the top fade, under the pins. */}
+      {size ? <Attribution top={ATTRIBUTION_TOP} maxWidth={size.width - 16} /> : null}
 
       {revealed
         ? pins.map((p, i) => (
@@ -340,6 +178,25 @@ export function MapCanvas({
             />
           ))
         : null}
+
+      {revealed && selectedPin && size ? (
+        <PlaceCallout
+          key={selectedPin.place.id}
+          place={selectedPin.place}
+          picked={selectedPicked}
+          pickers={[
+            ...(selectedPicked && you ? [you] : []),
+            ...selectedPin.place.pickedBy.flatMap((id) => byId.get(id) ?? []),
+          ]}
+          anchor={selectedPin.pos}
+          pinRadius={(PIN_SIZE + 6) / 2}
+          mapSize={size}
+          safeTop={TOP_FADE}
+          safeBottom={size.height - insets.bottom}
+          onToggle={() => onTogglePick?.(selectedPin.place.id)}
+          onDetails={() => onOpenDetails?.(selectedPin.place.id)}
+        />
+      ) : null}
     </View>
   );
 }

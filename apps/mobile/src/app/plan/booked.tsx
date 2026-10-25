@@ -15,9 +15,10 @@ import {
   textActionIcon,
   textActionLabel,
 } from "@/components/booked/share";
+import { gasPerPerson, planLegs } from "@/components/route/legs";
 import { AvatarStack, Body, Button, Label, Muted, Screen, Title } from "@/components/ui";
 import { flights, places, trip } from "@/mocks";
-import { usePlan } from "@/store/plan";
+import { isDriving, usePlan } from "@/store/plan";
 import { colors } from "@/theme";
 
 // Only say "Sent" when the platform confirms it (web share). Android's share sheet can't tell
@@ -40,7 +41,14 @@ export default function Booked() {
   const { demo } = useLocalSearchParams<{ demo?: string }>();
   const storePicks = usePlan((s) => s.picks);
   const picks = demo === "empty" ? [] : storePicks;
-  const itinerary = useMemo(() => buildItinerary(picks, trip, flights, places), [picks]);
+  // "Drive" swaps the flight for split gas, the same numbers the map footer uses.
+  const driving = isDriving(usePlan((s) => s.answers));
+  const itinerary = useMemo(() => {
+    const drive = driving
+      ? { gasPerPerson: gasPerPerson(planLegs(trip, flights, picks, true)) }
+      : undefined;
+    return buildItinerary(picks, trip, flights, places, drive);
+  }, [picks, driving]);
   const text = useMemo(() => summaryText(trip, itinerary), [itinerary]);
 
   const card = useRef<ComponentRef<typeof View>>(null);

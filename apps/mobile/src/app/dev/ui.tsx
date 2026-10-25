@@ -1,4 +1,4 @@
-import { AirplaneTilt, Bed, ForkKnife, MapPin } from "phosphor-react-native";
+import { AirplaneTilt, Bed, ForkKnife, MapPin, MapTrifold } from "phosphor-react-native";
 import { useState } from "react";
 import { View } from "react-native";
 import {
@@ -6,11 +6,14 @@ import {
   Badge,
   Body,
   Button,
+  Caption,
   Card,
   Chip,
+  Display,
   Heading,
   Label,
   Muted,
+  Perforation,
   Screen,
   Skeleton,
   Title,
@@ -29,6 +32,16 @@ export default function UiGallery() {
       <Body>Body text in Manrope. Headings in Bricolage Grotesque.</Body>
       <Muted>Muted text for secondary info.</Muted>
 
+      <Label>Type roles</Label>
+      <Display>Denver weekend</Display>
+      <Title>Friday, Nov 13</Title>
+      <Heading>The Crawford Hotel</Heading>
+      <Caption>Caption · 9:41 PM · 12px floor</Caption>
+      <View className="gap-1">
+        <Muted numeric>$1,111 · 4 going (numeric)</Muted>
+        <Muted numeric>$8,888 · 5 going (numeric)</Muted>
+      </View>
+
       <Label>Colors</Label>
       <View className="flex-row flex-wrap gap-2">
         {Object.entries(colors).map(([name, value]) => (
@@ -46,6 +59,11 @@ export default function UiGallery() {
       <Button label="Plan it" />
       <Button label="Change dates" variant="secondary" />
       <Button label="Not now" variant="ghost" />
+      <Button
+        label="Open the map"
+        disabled
+        icon={<MapTrifold size={20} color={colors.bg} weight={icon.activeWeight} />}
+      />
 
       <Label>Chips</Label>
       <View className="flex-row flex-wrap gap-2">
@@ -81,6 +99,20 @@ export default function UiGallery() {
         <Badge label="Spotted in ski bums" tone="accent" />
         <Badge label="Fits budget" tone="good" />
         <Badge label="3 picks" />
+        <Badge label="$40 over budget" tone="accent" variant="accent" />
+      </View>
+
+      <Label>Ticket perforation</Label>
+      <View className="overflow-hidden rounded-card bg-surface">
+        <View className="gap-1 p-5">
+          <Muted>When</Muted>
+          <Heading>Fri Nov 13 – Sun 15</Heading>
+        </View>
+        <Perforation />
+        <View className="gap-1 p-5">
+          <Heading>Fly or drive?</Heading>
+          <Muted>Austin → Denver is a 13-hour drive.</Muted>
+        </View>
       </View>
 
       <Label>Avatars</Label>

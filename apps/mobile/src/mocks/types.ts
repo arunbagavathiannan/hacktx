@@ -17,11 +17,37 @@ export type ChatMessage = {
   at: string; // ISO time
 };
 
+// A city the group stays in, in visiting order (the origin is not a stop).
+export type TripStop = {
+  city: string;
+  region: string;
+  lat: number;
+  lng: number;
+  airport?: string; // "DEN"
+  arrive: string; // ISO date
+  depart: string; // ISO date
+};
+
+// One hop of the route, by city name: origin -> stops... -> origin.
+export type TripLeg = {
+  from: string; // city
+  to: string; // city
+  mode: "fly" | "drive";
+  // Flight options for this leg (Flight.id). A "fly" leg without them is covered by an
+  // earlier round-trip fare (the flight home on a one-city trip).
+  flightIds?: string[];
+  driveMiles?: number; // used when the group drives this leg
+  driveHours?: number;
+};
+
 export type Trip = {
   id: string;
   title: string;
+  // The first stop, kept for screens that only know one destination.
   destination: { city: string; region: string; lat: number; lng: number };
   origin: { city: string; airport: string; lat: number; lng: number };
+  stops: TripStop[];
+  legs: TripLeg[];
   dates: { start: string; end: string; label: string };
   budgetPerPerson: number;
   members: Member[];

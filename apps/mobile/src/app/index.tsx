@@ -1,48 +1,59 @@
-import { Redirect, router } from "expo-router";
-import { ChatsCircle, Sparkle } from "phosphor-react-native";
-import { View } from "react-native";
-import {
-  AvatarStack,
-  Badge,
-  Button,
-  Card,
-  Heading,
-  Label,
-  Muted,
-  Screen,
-  Title,
-} from "@/components/ui";
-import { trip } from "@/mocks";
+import { Redirect, router, useLocalSearchParams } from "expo-router";
+import { ChatsCircle, GearSix, Sparkle } from "phosphor-react-native";
+import { IconButton } from "@/components/home/IconButton";
+import { PastPlans } from "@/components/home/PastPlans";
+import { PlanCard } from "@/components/home/PlanCard";
+import { Button, Label, Muted, Screen, Title } from "@/components/ui";
 import { usePreferences } from "@/store/preferences";
-import { colors } from "@/theme";
+import { colors, icon } from "@/theme";
 
-// Home: the user's plans. In the demo, the plan starts from the popup (/plan/incoming).
+// Home: the plans Huddle spotted in your chats. In the demo, the plan starts from the
+// popup (/plan/incoming).
 export default function Home() {
+  // MOCK: `?demo=home` skips the first-run redirect so a fresh browser (PR screenshots)
+  // lands here instead of onboarding.
+  const isDemo = useLocalSearchParams<{ demo?: string }>().demo === "home";
   const onboarded = usePreferences((s) => s.onboarded);
-  if (!onboarded) return <Redirect href="/onboarding" />;
+  if (!isDemo && !onboarded) return <Redirect href="/onboarding" />;
 
   return (
-    <Screen scroll>
-      <View className="flex-row items-center gap-2 pt-4">
-        <ChatsCircle size={28} color={colors.accent} weight="fill" />
-        <Title>Huddle</Title>
-      </View>
-      <Muted>Plans Huddle spotted in your chats.</Muted>
-
-      <Card>
-        <View className="gap-3">
-          <Badge label="Spotted in ski bums" tone="accent" />
-          <Heading>{trip.title}</Heading>
-          <Muted>{trip.dates.label}</Muted>
-          <AvatarStack members={trip.members} size="sm" />
+    <Screen scroll className="gap-6">
+      <View className="flex-row items-center justify-between pt-3">
+        <View
+          accessible
+          accessibilityRole="header"
+          accessibilityLabel="Huddle"
+          className="flex-row items-center gap-2"
+        >
+          <ChatsCircle size={30} color={colors.accent} weight={icon.activeWeight} />
+          <Title>Huddle</Title>
         </View>
-      </Card>
+        <IconButton icon={GearSix} label="Settings" onPress={() => router.push("/settings")} />
+      </View>
 
-      <View className="gap-2 pt-2">
-        <Label>Demo</Label>
+      <View className="gap-3">
+        <View className="gap-1">
+          <Label>Spotted in your chats</Label>
+          <Muted>Huddle noticed this trip in your group chat. Tap to review it.</Muted>
+        </View>
+        <PlanCard onPress={() => router.push("/plan/summary")} />
+      </View>
+
+      <View className="gap-3">
+        <Label>Past plans</Label>
+        <PastPlans />
+      </View>
+
+      <View className="gap-3 rounded-card border border-dashed border-line p-4">
+        <View className="gap-1">
+          <Label className="text-accent">Demo</Label>
+          <Muted>
+            Plays a group chat turning into a plan, with the popup you'd get on your phone.
+          </Muted>
+        </View>
         <Button
-          label="Simulate a plan in the group chat"
-          icon={<Sparkle size={20} color={colors.bg} weight="fill" />}
+          label="Simulate a plan"
+          icon={<Sparkle size={20} color={colors.bg} weight={icon.activeWeight} />}
           onPress={() => router.push("/plan/incoming")}
         />
       </View>

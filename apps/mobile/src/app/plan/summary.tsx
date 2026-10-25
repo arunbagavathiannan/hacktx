@@ -3,6 +3,7 @@ import { MapTrifold, Sparkle } from "phosphor-react-native";
 import { useEffect, useMemo, useState } from "react";
 import { View } from "react-native";
 import Animated, { FadeInDown } from "react-native-reanimated";
+import { prefetchMapTiles } from "@/components/map/MapCanvas";
 import { ClarificationCard } from "@/components/summary/ClarificationCard";
 import {
   demoPrefs,
@@ -30,6 +31,9 @@ const autoFilled = new Set<string>();
 
 // What the agent understood from the chat, plus the one or two things it still needs.
 export default function Summary() {
+  useEffect(() => {
+    prefetchMapTiles();
+  }, []); // cache map tiles before the map opens
   // MOCK: `?demo=prefs` renders with sample preferences (PR screenshots, demo rehearsal).
   // Display-only: its answers live in local state and never reach usePlan.
   const isDemo = useLocalSearchParams<{ demo?: string }>().demo === "prefs";
@@ -53,20 +57,36 @@ export default function Summary() {
   );
 
   // Computed during render (not after an effect) so the footer is right on the first frame.
-  const shown = (id: string) => saved[id] ?? inferred[id] ?? undefined;
+  // An auto-filled answer that no longer matches the preferences (edited in Settings) is stale:
+  // ignore it so it never looks user-chosen. The effect below re-infers or clears it.
+  const stale = (id: string) => !isDemo && autoFilled.has(id) && saved[id] !== inferred[id];
+  const shown = (id: string) => (stale(id) ? undefined : saved[id]) ?? inferred[id] ?? undefined;
   const fromPreferences = (id: string) =>
     inferred[id] != null &&
     shown(id) === inferred[id] &&
     (saved[id] === undefined || (!isDemo && autoFilled.has(id)));
 
-  // Real flow: save what onboarding answered so later screens see it. Never overwrite a choice.
+  // Real flow: save what onboarding answered so later screens see it. Never overwrite a choice
+  // the user tapped; only answers we auto-filled get re-inferred or cleared.
   useEffect(() => {
     if (isDemo) return;
     for (const c of clarifications) {
       const auto = inferred[c.id];
-      if (auto && usePlan.getState().answers[c.id] === undefined) {
-        autoFilled.add(c.id);
-        answer(c.id, auto);
+      const current = usePlan.getState().answers[c.id];
+      if (current === undefined) {
+        if (auto) {
+          autoFilled.add(c.id);
+          answer(c.id, auto);
+        }
+      } else if (autoFilled.has(c.id) && current !== auto) {
+        if (auto) answer(c.id, auto);
+        else {
+          autoFilled.delete(c.id);
+          usePlan.setState((s) => {
+            const { [c.id]: _, ...rest } = s.answers;
+            return { answers: rest };
+          });
+        }
       }
     }
   }, [isDemo, inferred, answer]);

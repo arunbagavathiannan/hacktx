@@ -50,6 +50,30 @@ export const trip: Trip = {
   title: "Denver weekend",
   destination: { city: "Denver", region: "Colorado", lat: 39.7392, lng: -104.9903 },
   origin: { city: "Austin", airport: "AUS", lat: 30.1975, lng: -97.6664 },
+  stops: [
+    {
+      city: "Denver",
+      region: "Colorado",
+      lat: 39.7392,
+      lng: -104.9903,
+      airport: "DEN",
+      arrive: "2026-11-13",
+      depart: "2026-11-15",
+    },
+  ],
+  // MOCK: drive miles/hours are rough Austin <-> Denver numbers, not from a routing API.
+  // The flights are round-trip fares, so the flight home has no options of its own.
+  legs: [
+    {
+      from: "Austin",
+      to: "Denver",
+      mode: "fly",
+      flightIds: ["f1", "f2", "f3"],
+      driveMiles: 920,
+      driveHours: 13,
+    },
+    { from: "Denver", to: "Austin", mode: "fly", driveMiles: 920, driveHours: 13 },
+  ],
   dates: { start: "2026-11-13", end: "2026-11-15", label: "Fri Nov 13 – Sun Nov 15" },
   budgetPerPerson: 400,
   members,

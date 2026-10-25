@@ -15,7 +15,7 @@ import {
 } from "@/components/onboarding/options";
 import { ProgressBar } from "@/components/onboarding/ProgressBar";
 import { Button, Chip, Label, Muted, Screen, Title } from "@/components/ui";
-import { usePreferences } from "@/store/preferences";
+import { usePreferences, usePreferencesHydrated } from "@/store/preferences";
 import { colors, icon } from "@/theme";
 
 const last = steps.length - 1;
@@ -30,7 +30,9 @@ function initialStep(param: string | undefined) {
 // Four quick questions, one per page. Answers save to usePreferences as you tap,
 // so Huddle can skip questions later (see /plan/summary).
 export default function Onboarding() {
-  const params = useLocalSearchParams<{ step?: string }>();
+  const params = useLocalSearchParams<{ step?: string; edit?: string }>();
+  // `?edit=1` (from Settings): same questions, prefilled from the store; finishing goes back.
+  const editing = params.edit === "1";
   const [step, setStep] = useState(() => initialStep(params.step));
   const [direction, setDirection] = useState<1 | -1>(1);
 
@@ -45,7 +47,9 @@ export default function Onboarding() {
 
   const finish = () => {
     finishOnboarding();
-    router.replace("/");
+    if (!editing) router.replace("/");
+    else if (router.canGoBack()) router.back();
+    else router.replace("/settings");
   };
   const go = (to: number) => {
     setDirection(to > step ? 1 : -1);
@@ -66,6 +70,10 @@ export default function Onboarding() {
     }, [step]),
   );
 
+  // Wait for saved answers to load, so a cold start never shows (or saves over) empty ones.
+  const hydrated = usePreferencesHydrated();
+  if (!hydrated) return <View className="flex-1 bg-bg" />;
+
   const { title, subtitle } = steps[step];
   const entering = (direction === 1 ? FadeInRight : FadeInLeft).duration(280);
 
@@ -83,7 +91,7 @@ export default function Onboarding() {
             />
           ) : null}
           <Button
-            label={step === last ? "Let's go" : "Next"}
+            label={step === last ? (editing ? "Done" : "Let's go") : "Next"}
             icon={
               step === last ? (
                 <Check size={20} color={colors.bg} weight={icon.weight} />
@@ -102,12 +110,12 @@ export default function Onboarding() {
         <ProgressBar step={step} keys={stepKeys} />
         <Pressable
           accessibilityRole="button"
-          accessibilityLabel="Skip onboarding"
+          accessibilityLabel={editing ? "Done editing" : "Skip onboarding"}
           onPress={finish}
           hitSlop={8}
           className="min-h-12 min-w-12 items-center justify-center active:opacity-60"
         >
-          <Text className="font-body-semibold text-sm text-muted">Skip</Text>
+          <Text className="font-body-semibold text-sm text-muted">{editing ? "Done" : "Skip"}</Text>
         </Pressable>
       </View>
 
