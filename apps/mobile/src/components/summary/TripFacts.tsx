@@ -3,7 +3,7 @@ import type { ReactNode } from "react";
 import { View } from "react-native";
 import { AvatarStack, Body, Card, Muted } from "@/components/ui";
 import { cn } from "@/lib/cn";
-import type { Trip } from "@/mocks/types";
+import type { TripBrief } from "@/mocks/types";
 import { colors, icon } from "@/theme";
 
 function Row({
@@ -40,7 +40,7 @@ export function TripFacts({
   destination,
   ideas,
 }: {
-  trip: Trip;
+  trip: TripBrief;
   destination: { city: string; region: string } | null;
   ideas: number;
 }) {
@@ -50,7 +50,11 @@ export function TripFacts({
       <Row
         first
         icon={MapPin}
-        title={destination ? `${destination.city}, ${destination.region}` : "Where: pick below"}
+        title={
+          destination
+            ? `${destination.city}, ${destination.region}`
+            : "Where to? The group picks next"
+        }
         detail={
           destination
             ? `From ${trip.origin.city} (${trip.origin.airport})`

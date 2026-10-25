@@ -1,6 +1,17 @@
-// MOCK: demo trip until the real detector + agent run. Denver weekend for a UT friend group.
+// MOCK: demo trip until the real detector + agent run. A UT friend group wants a weekend away.
+// The chat never names a city, so Huddle suggests three (mocks/destinations.ts) and the group
+// picks. This file has the chat, the brief, and Denver's data (one of the three ideas).
 // Prices, ratings, and review counts are made up; coordinates are real.
-import type { AgentStep, ChatMessage, Clarification, Flight, Member, Place, Trip } from "./types";
+import type {
+  AgentStep,
+  ChatMessage,
+  Clarification,
+  Flight,
+  Member,
+  Place,
+  Trip,
+  TripBrief,
+} from "./types";
 
 export const members: Member[] = [
   { id: "you", name: "You", color: "#FF7A3D", isYou: true },
@@ -24,7 +35,7 @@ export const chat: ChatMessage[] = [
     app: "whatsapp",
     chat: "ski bums",
     from: "sam",
-    text: "denver?? red rocks has a show nov 15",
+    text: "somewhere with live music??",
     at: "2026-10-24T19:03:00-05:00",
   },
   {
@@ -45,11 +56,27 @@ export const chat: ChatMessage[] = [
   },
 ];
 
+// MOCK: the message the detector flags as the plan ("somewhere with live music??"). The
+// popup quotes it as proof of what Huddle saw.
+export const triggerMessageId = "m2";
+
+// MOCK: what the detector pulls out of the chat before any city is picked.
+export const brief: TripBrief = {
+  title: "Trip before finals",
+  why: "Somewhere with live music, under $400 each",
+  origin: { city: "Austin", airport: "AUS", lat: 30.1975, lng: -97.6664 },
+  dates: { start: "2026-11-13", end: "2026-11-15", label: "Fri Nov 13 – Sun Nov 15" },
+  budgetPerPerson: 400,
+  members,
+  sourceChat: { app: "whatsapp", name: "ski bums" },
+};
+
+// Denver, one of the three destination ideas (see mocks/destinations.ts).
 export const trip: Trip = {
+  ...brief,
   id: "denver-nov",
   title: "Denver weekend",
   destination: { city: "Denver", region: "Colorado", lat: 39.7392, lng: -104.9903 },
-  origin: { city: "Austin", airport: "AUS", lat: 30.1975, lng: -97.6664 },
   stops: [
     {
       city: "Denver",
@@ -74,15 +101,12 @@ export const trip: Trip = {
     },
     { from: "Denver", to: "Austin", mode: "fly", driveMiles: 920, driveHours: 13 },
   ],
-  dates: { start: "2026-11-13", end: "2026-11-15", label: "Fri Nov 13 – Sun Nov 15" },
-  budgetPerPerson: 400,
-  members,
-  sourceChat: { app: "whatsapp", name: "ski bums" },
   why: "Red Rocks show on the 15th",
 };
 
 // The agent doesn't pick a city: it suggests a few (mocks/destinations.ts) and the group
-// chooses on the summary screen.
+// chooses on /plan/destinations. The timeline fills in each step's numbers from the
+// destination data (components/timeline/destinationSteps.ts), so they always match the map.
 export const agentSteps: AgentStep[] = [
   {
     id: "s1",
@@ -109,14 +133,14 @@ export const agentSteps: AgentStep[] = [
     id: "s4",
     tool: "search_flights",
     label: "Checking flights from AUS",
-    detail: "Round trips for all 3 ideas · Denver from $142",
+    detail: "Round trips for all 3 ideas",
     durationMs: 2000,
   },
   {
     id: "s5",
     tool: "search_hotels",
     label: "Finding places to stay for 5",
-    detail: "Rooms for 5 in each city · Denver from $175 each",
+    detail: "Rooms for 5 in each city",
     durationMs: 1800,
   },
   {
@@ -130,7 +154,7 @@ export const agentSteps: AgentStep[] = [
     id: "s7",
     tool: "verify",
     label: "Double-checking prices and dates",
-    detail: "Prices match sources · Denver comes to $382 each, under $400",
+    detail: "Prices match sources",
     durationMs: 1500,
   },
 ];

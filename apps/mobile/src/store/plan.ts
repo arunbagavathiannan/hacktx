@@ -1,11 +1,17 @@
 import { create } from "zustand";
-import { bestHotel, groupSize, nightsBetween, placePerPerson } from "@/lib/pricing";
-import { flights, places, trip } from "@/mocks";
+import { bestHotel, groupSize, nightsBetween, placePerPerson, tripPerPerson } from "@/lib/pricing";
+import {
+  type DestinationSuggestion,
+  destinationById,
+  destinationSuggestions,
+} from "@/mocks/destinations";
 
 type State = {
   answers: Record<string, string>; // Clarification.id -> chosen option
-  picks: string[]; // Place.id / Flight.id the user added to the plan
-  // DestinationSuggestion.id the group chose on the summary screen; null until they choose.
+  // Place.id / Flight.id the user added to the plan, for the current destination (see
+  // useDestination). Choosing a different destination starts its default plan.
+  picks: string[];
+  // DestinationSuggestion.id the group chose on /plan/destinations; null until they choose.
   destinationId: string | null;
   answer: (clarificationId: string, option: string) => void;
   chooseDestination: (id: string) => void;
@@ -17,8 +23,6 @@ type State = {
   pickFlight: (id: string, among?: string[]) => void;
   reset: () => void;
 };
-
-const FLIGHT_IDS = flights.map((f) => f.id);
 
 // The "Fly or drive?" clarification (mocks/trip.ts, id "c1").
 export const TRAVEL_QUESTION_ID = "c1";
@@ -38,12 +42,17 @@ export function togglePlace(picks: string[], id: string) {
   return picks.includes(id) ? picks.filter((p) => p !== id) : [...picks, id];
 }
 
-// Default plan, so it's never empty in the demo: the group's most-picked flight and
-// activity, plus the best hotel for this group size within budget (see bestHotel).
-function defaultPicks() {
-  const flight = flights[0];
-  const show = places.find((p) => p.id === "a1");
-  const hotel = bestHotel(places, {
+const byVotes = (a: { pickedBy: string[] }, b: { pickedBy: string[] }) =>
+  b.pickedBy.length - a.pickedBy.length;
+
+// Default plan for one destination, so it's never empty in the demo: the group's most-picked
+// flight and its headline show/spot, plus the best hotel for this group size within budget
+// (see bestHotel).
+export function defaultPicksFor(dest: DestinationSuggestion) {
+  const { trip } = dest;
+  const flight = [...dest.flights].sort(byVotes)[0];
+  const show = dest.places.find((p) => p.id === dest.headlinePlaceId);
+  const hotel = bestHotel(dest.places, {
     people: groupSize(trip),
     nights: nightsBetween(trip.dates.start, trip.dates.end),
     budgetPerPerson: trip.budgetPerPerson,
@@ -52,18 +61,47 @@ function defaultPicks() {
   return [flight?.id, hotel?.hotel.id, show?.id].filter((id): id is string => Boolean(id));
 }
 
+// What a destination's default plan costs each person: the est. $/person on the destination
+// screen, summary, and timeline. Same math as the map footer when the map opens.
+export function defaultEstimateFor(dest: DestinationSuggestion) {
+  return tripPerPerson(defaultPicksFor(dest), dest);
+}
+
+// Every suggestion with its default plan estimate, in the planner's order.
+export function destinationEstimates() {
+  return destinationSuggestions.map((d) => ({ destination: d, perPerson: defaultEstimateFor(d) }));
+}
+
+// The destination the post-pick screens (map, booked, home card) show. Before the group picks
+// it's the leading idea (MOCK: only reachable by direct link, e.g. PR screenshots).
+export function useDestination() {
+  return destinationById(usePlan((s) => s.destinationId));
+}
+
+const flightIdsOf = (destinationId: string | null) =>
+  destinationById(destinationId).flights.map((f) => f.id);
+
 export const usePlan = create<State>()((set) => ({
   answers: {},
-  picks: defaultPicks(),
+  picks: defaultPicksFor(destinationById(null)),
   destinationId: null,
   answer: (clarificationId, option) =>
     set((s) => ({ answers: { ...s.answers, [clarificationId]: option } })),
-  chooseDestination: (id) => set({ destinationId: id }),
+  // Re-choosing the same city keeps its picks; a different city starts from its defaults.
+  chooseDestination: (id) =>
+    set((s) =>
+      s.destinationId === id
+        ? {}
+        : { destinationId: id, picks: defaultPicksFor(destinationById(id)) },
+    ),
   togglePick: (id) =>
     set((s) => {
-      if (FLIGHT_IDS.includes(id)) return { picks: withFlight(s.picks, id, FLIGHT_IDS) };
+      const flightIds = flightIdsOf(s.destinationId);
+      if (flightIds.includes(id)) return { picks: withFlight(s.picks, id, flightIds) };
       return { picks: togglePlace(s.picks, id) };
     }),
-  pickFlight: (id, among = FLIGHT_IDS) => set((s) => ({ picks: withFlight(s.picks, id, among) })),
-  reset: () => set({ answers: {}, picks: defaultPicks(), destinationId: null }),
+  pickFlight: (id, among) =>
+    set((s) => ({ picks: withFlight(s.picks, id, among ?? flightIdsOf(s.destinationId)) })),
+  reset: () =>
+    set({ answers: {}, picks: defaultPicksFor(destinationById(null)), destinationId: null }),
 }));

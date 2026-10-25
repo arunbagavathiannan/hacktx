@@ -12,7 +12,8 @@ const NON_MAP_HEIGHT = 258;
 // Extra margin of tiles around the estimate, in case the real map is a bit bigger or shifted.
 const PAD = 160;
 
-let started = false;
+// One entry per set of places (a city), so each destination idea prefetches once.
+const started = new Set<string>();
 
 // Download the map's tiles into expo-image's memory + disk cache before the map opens, so
 // the demo map has streets even if venue Wi-Fi drops later. Safe to call more than once.
@@ -23,8 +24,9 @@ export function prefetchMapTiles(
   mapPlaces: Place[] = places, // MOCK: demo trip places until the plan comes from Supabase
   insets: Insets = DEMO_MAP_INSETS,
 ) {
-  if (started || mapPlaces.length === 0) return;
-  started = true;
+  const key = mapPlaces.map((p) => p.id).join(",");
+  if (started.has(key) || mapPlaces.length === 0) return;
+  started.add(key);
   const window = Dimensions.get("window");
   const size: Size = {
     width: window.width,
@@ -33,7 +35,7 @@ export function prefetchMapTiles(
   const proj = fitMap(mapPlaces, corePlaceIds(mapPlaces), size, withAttributionRoom(insets));
   const urls = LAYERS.flatMap((layer) => visibleTiles(proj, size, layer, PAD).map((t) => t.url));
   const retryLater = () => {
-    started = false; // offline right now: let a later call try again
+    started.delete(key); // offline right now: let a later call try again
   };
   Image.prefetch(urls, "memory-disk")
     .then((ok) => {

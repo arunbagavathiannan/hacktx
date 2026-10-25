@@ -39,7 +39,7 @@ export function ResetConfirm({ onCancel, onConfirm }: Props) {
             Start the demo over?
           </Text>
           <Muted>
-            Clears your preferences and restores the Denver plan to its starting picks, then opens
+            Clears your preferences, the group's destination pick, and your map picks, then opens
             onboarding.
           </Muted>
         </View>

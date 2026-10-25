@@ -1,11 +1,11 @@
 import { router, useLocalSearchParams } from "expo-router";
-import { MapTrifold, Sparkle } from "phosphor-react-native";
+import { ArrowRight, Sparkle } from "phosphor-react-native";
 import { useEffect, useMemo, useState } from "react";
 import { View } from "react-native";
 import Animated, { FadeInDown } from "react-native-reanimated";
 import { prefetchMapTiles } from "@/components/map/MapCanvas";
 import { ClarificationCard } from "@/components/summary/ClarificationCard";
-import { DestinationPicker } from "@/components/summary/DestinationPicker";
+import { DestinationTeaser } from "@/components/summary/DestinationTeaser";
 import {
   demoPrefs,
   inferAnswer,
@@ -15,15 +15,17 @@ import {
 } from "@/components/summary/personalize";
 import { TripFacts } from "@/components/summary/TripFacts";
 import { Badge, Body, Button, Label, Muted, Screen, Title } from "@/components/ui";
-import { clarifications, flights, trip } from "@/mocks";
+import { brief, clarifications } from "@/mocks";
 import { destinationSuggestions } from "@/mocks/destinations";
 import type { Preferences } from "@/mocks/types";
-import { usePlan } from "@/store/plan";
+import { destinationEstimates, usePlan } from "@/store/plan";
 import { usePreferences } from "@/store/preferences";
 import { colors, icon } from "@/theme";
 
 const appName = { whatsapp: "WhatsApp", instagram: "Instagram" } as const;
-const travel = tripContext(flights);
+// Every idea's flights, so "Short flight (<3h)" can answer fly-or-drive before the pick.
+const travel = tripContext(destinationSuggestions.flatMap((d) => d.flights));
+const ideas = destinationEstimates();
 
 const enter = (i: number) => FadeInDown.delay(i * 70).duration(320);
 
@@ -31,11 +33,13 @@ const enter = (i: number) => FadeInDown.delay(i * 70).duration(320);
 // Module-level so it lasts as long as the in-memory plan store, across visits to this screen.
 const autoFilled = new Set<string>();
 
-// What the agent understood from the chat, plus the one or two things it still needs.
+// What the agent understood from the chat, plus the one or two things it still needs, and a
+// look at the destination ideas. The group picks the city next, on the globe.
 export default function Summary() {
   useEffect(() => {
-    prefetchMapTiles();
-  }, []); // cache map tiles before the map opens
+    // Cache every idea's map tiles now, so whichever city the group picks has streets.
+    for (const d of destinationSuggestions) prefetchMapTiles(d.places);
+  }, []);
   // MOCK: `?demo=prefs` renders with sample preferences (PR screenshots, demo rehearsal).
   // Display-only: its answers live in local state and never reach usePlan.
   const isDemo = useLocalSearchParams<{ demo?: string }>().demo === "prefs";
@@ -102,22 +106,19 @@ export default function Summary() {
     answer(id, option);
   };
 
-  // The group picks the city here, after the facts and questions; the map opens for it.
-  const storeDestinationId = usePlan((s) => s.destinationId);
-  const chooseDestination = usePlan((s) => s.chooseDestination);
-  const [demoDestinationId, setDemoDestinationId] = useState<string | null>(null);
-  const destinationId = isDemo ? demoDestinationId : storeDestinationId;
-  const destination = destinationSuggestions.find((d) => d.id === destinationId) ?? null;
-  const onChoose = isDemo ? setDemoDestinationId : chooseDestination;
+  // The group picks the city on the globe (/plan/destinations), not here. Coming back after a
+  // pick, the summary names it.
+  const destinationId = usePlan((s) => s.destinationId);
+  const destination = isDemo
+    ? null
+    : (destinationSuggestions.find((d) => d.id === destinationId) ?? null);
 
   const remaining = clarifications.filter((c) => !shown(c.id)).length;
   const lines = preferenceLines(prefs);
   const blocker =
     remaining > 0
-      ? `Answer ${remaining} quick question${remaining === 1 ? "" : "s"} to open the map`
-      : destination
-        ? null
-        : "Pick where to go to open the map";
+      ? `Answer ${remaining} quick question${remaining === 1 ? "" : "s"} to see where to go`
+      : null;
 
   return (
     <Screen
@@ -126,10 +127,10 @@ export default function Summary() {
         <View className="gap-2">
           {blocker ? <Muted className="text-center">{blocker}</Muted> : null}
           <Button
-            label={destination ? `Open the map for ${destination.city}` : "Open the map"}
-            icon={<MapTrifold size={20} color={colors.bg} weight={icon.activeWeight} />}
+            label="Find where to go"
+            icon={<ArrowRight size={20} color={colors.bg} weight={icon.weight} />}
             disabled={blocker !== null}
-            onPress={() => router.push("/plan/map")}
+            onPress={() => router.push("/plan/destinations")}
           />
         </View>
       }
@@ -137,21 +138,23 @@ export default function Summary() {
       <Animated.View entering={enter(0)}>
         <View className="gap-3 pt-4">
           <Badge
-            label={`From ${trip.sourceChat.name} on ${appName[trip.sourceChat.app]}`}
+            label={`From ${brief.sourceChat.name} on ${appName[brief.sourceChat.app]}`}
             tone="accent"
           />
           <Title className="text-4xl leading-[44px]">
-            {destination ? `${destination.city} weekend` : "Weekend trip"}
+            {destination ? destination.trip.title : brief.title}
           </Title>
           <View className="flex-row items-center gap-2">
             <Sparkle size={18} color={colors.gold} weight={icon.activeWeight} />
-            <Body className="flex-1 text-muted">{trip.why}</Body>
+            <Body className="flex-1 text-muted">
+              {destination ? destination.trip.why : brief.why}
+            </Body>
           </View>
         </View>
       </Animated.View>
 
       <Animated.View entering={enter(1)}>
-        <TripFacts trip={trip} destination={destination} ideas={destinationSuggestions.length} />
+        <TripFacts trip={brief} destination={destination} ideas={destinationSuggestions.length} />
       </Animated.View>
 
       {lines.length > 0 ? (
@@ -188,18 +191,7 @@ export default function Summary() {
       ) : null}
 
       <Animated.View entering={enter(4)}>
-        <View className="gap-3">
-          <Label>Where to?</Label>
-          <Muted>
-            Huddle found {destinationSuggestions.length} ideas in the chat. Pick one and the map
-            opens for it.
-          </Muted>
-          <DestinationPicker
-            suggestions={destinationSuggestions}
-            selectedId={destinationId}
-            onSelect={onChoose}
-          />
-        </View>
+        <DestinationTeaser ideas={ideas} budgetPerPerson={brief.budgetPerPerson} />
       </Animated.View>
     </Screen>
   );

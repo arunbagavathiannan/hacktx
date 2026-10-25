@@ -1,28 +1,32 @@
 import { CaretRight, Sparkle, UsersThree } from "phosphor-react-native";
 import { Pressable, View } from "react-native";
 import { AvatarStack, Badge, Heading, Muted } from "@/components/ui";
-import { estimatePerPerson, groupSize, nightsBetween } from "@/lib/pricing";
-import { flights, places, trip } from "@/mocks";
+import { tripPerPerson } from "@/lib/pricing";
+import { brief } from "@/mocks";
+import { destinationById, destinationSuggestions } from "@/mocks/destinations";
 import { usePlan } from "@/store/plan";
 import { colors, icon } from "@/theme";
 
 const appName = { whatsapp: "WhatsApp", instagram: "Instagram" } as const;
 
 // The trip Huddle spotted in the group chat. Tapping it opens the trip summary.
-// Neutral copy: it never claims the plan is done before the demo runs the agent.
+// Neutral copy: it never claims the plan is done before the demo runs the agent, and it never
+// names a city (or a city's price) before the group picks one.
 export function PlanCard({ onPress }: { onPress: () => void }) {
   const picks = usePlan((s) => s.picks);
-  const people = groupSize(trip);
-  const perPerson = estimatePerPerson(picks, {
-    places,
-    flights,
-    people,
-    nights: nightsBetween(trip.dates.start, trip.dates.end),
-  });
+  const destinationId = usePlan((s) => s.destinationId);
+  const picked = destinationId ? destinationById(destinationId) : null;
+  const trip = picked?.trip ?? brief;
+  const people = Math.max(1, brief.members.length);
+  const perPerson = picked ? tripPerPerson(picks, picked) : 0;
   const status = [
     `Spotted in ${trip.sourceChat.name}`,
     `${people} ${people === 1 ? "person" : "people"}`,
-    perPerson > 0 ? `~$${perPerson} each` : null,
+    picked
+      ? perPerson > 0
+        ? `~$${perPerson} each`
+        : null
+      : `${destinationSuggestions.length} ideas`,
   ]
     .filter(Boolean)
     .join(" · ");

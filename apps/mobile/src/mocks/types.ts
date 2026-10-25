@@ -55,6 +55,36 @@ export type Trip = {
   why: string; // one line the agent extracted, e.g. "Red Rocks show on the 15th"
 };
 
+// What Huddle knows from the chat before the group picks a city: who, when, budget, and
+// where everyone leaves from. Each destination option turns it into a full Trip.
+export type TripBrief = Pick<
+  Trip,
+  "origin" | "dates" | "budgetPerPerson" | "members" | "sourceChat"
+> & {
+  title: string; // "Trip before finals"
+  why: string; // what the group asked for, e.g. "Live music, under $400 each"
+};
+
+// A city the planner suggests (suggest_destinations) before the group picks one. Carries the
+// whole one-city dataset, so every screen after the pick works for it.
+export type DestinationSuggestion = {
+  id: string; // "den"
+  city: string;
+  region: string;
+  airport: string; // "DEN"
+  lat: number;
+  lng: number;
+  match: number; // 0-100, how well it fits the chat + preferences
+  why: string; // the signal behind the suggestion, in a few words: "Red Rocks show Sun"
+  hasDemoData: boolean; // has flights, hotels, and places, so the map can open for it
+  flightTime: string; // nonstop flight time from the origin: "2h 15m"
+  votes: string[]; // Member.id, friends who voted for this idea
+  headlinePlaceId: string; // the show/spot that makes the case, always in the default plan
+  trip: Trip;
+  flights: Flight[]; // round-trip fares from the origin
+  places: Place[]; // hotels, food, activities, nightlife
+};
+
 export type PlaceCategory = "hotel" | "food" | "activity" | "nightlife";
 
 export type Place = {
@@ -107,7 +137,12 @@ export type AgentStep = {
   label: string; // "Searching flights AUS → DEN"
   detail: string; // "Found 14 flights, best $142"
   durationMs: number; // how long the mock playback shows it running
+  // Per-option results shown under the detail once the step is done, e.g. one row per
+  // destination idea: { label: "Denver", value: "$142", note: "Southwest · 2h 15m" }.
+  results?: AgentStepResult[];
 };
+
+export type AgentStepResult = { label: string; value?: string; note?: string };
 
 export type Clarification = {
   id: string;

@@ -69,7 +69,7 @@ export function useStepPlayback(steps: PlaybackStep[], instant: boolean) {
     });
     at(t, () => {
       setReady(true);
-      announce("Plan ready");
+      announce("Ready");
       if (native) Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     });
     at(t + READY_BEAT_MS, () => setFinished(true));

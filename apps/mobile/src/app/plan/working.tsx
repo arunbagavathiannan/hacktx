@@ -1,32 +1,42 @@
 import { router, useLocalSearchParams } from "expo-router";
 import { ArrowRight, CheckCircle, ShieldCheck } from "phosphor-react-native";
-import { useRef } from "react";
+import { useRef, useState } from "react";
 import { ScrollView, type ScrollViewInstance, Text, View } from "react-native";
 import Animated, { FadeInUp, useReducedMotion, ZoomIn } from "react-native-reanimated";
+import { destinationSteps } from "@/components/timeline/destinationSteps";
 import { LiveDot, ProgressBar } from "@/components/timeline/ProgressBar";
 import { ReadyRow, StepRow } from "@/components/timeline/StepRow";
 import { type PlaybackStep, useStepPlayback } from "@/components/timeline/useStepPlayback";
 import { AvatarStack, Button, Label, Muted, Screen, Title } from "@/components/ui";
 import { cn } from "@/lib/cn";
-import { agentSteps, trip } from "@/mocks";
+import { brief } from "@/mocks";
+import { destinationSuggestions } from "@/mocks/destinations";
+import { usePreferences } from "@/store/preferences";
 import { colors } from "@/theme";
 
 // Dev only: the same run with the flights tool failing, to review the fallback row.
-const fallbackSteps: PlaybackStep[] = agentSteps.map((s) =>
-  s.tool === "search_flights"
-    ? { ...s, outcome: "failed", fallback: "Couldn't reach flights, using cached results" }
-    : s,
-);
+const withFallback = (steps: PlaybackStep[]): PlaybackStep[] =>
+  steps.map((s) =>
+    s.tool === "search_flights"
+      ? { ...s, outcome: "failed", fallback: "Couldn't reach flights, using cached results" }
+      : s,
+  );
 
 // Step 2 of the demo: the live "Huddle is working" timeline, one row per agent tool call.
-// MOCK: plays mocks/agentSteps on a timer (all succeed) until the agent_steps Realtime feed
-// exists. Dev: ?demo=done shows the finished timeline, ?demo=fallback the same with a
-// failed tool.
+// It ends with three destination ideas; the group picks one on /plan/destinations.
+// MOCK: plays mocks/agentSteps (numbers filled in by destinationSteps) on a timer, all
+// succeeding, until the agent_steps Realtime feed exists. Dev: ?demo=done shows the finished
+// timeline, ?demo=fallback the same with a failed tool.
 export default function Working() {
   const { demo } = useLocalSearchParams<{ demo?: string }>();
   const reduceMotion = useReducedMotion();
   const instant = demo === "done" || demo === "fallback" || reduceMotion;
-  const steps = demo === "fallback" ? fallbackSteps : agentSteps;
+  // Built once per visit from the saved onboarding answers, so a late store update can't
+  // restart the playback.
+  const [steps] = useState(() => {
+    const built = destinationSteps(usePreferences.getState());
+    return demo === "fallback" ? withFallback(built) : built;
+  });
 
   const { visible, status, ended, failed, ready, finished } = useStepPlayback(steps, instant);
   const scroll = useRef<ScrollViewInstance>(null);
@@ -34,7 +44,7 @@ export default function Working() {
   const summary =
     failed > 0
       ? `${total - failed} of ${total} steps done · ${failed} used a fallback`
-      : `${total} steps done · prices checked against sources`;
+      : `${destinationSuggestions.map((d) => d.city).join(", ")} · prices checked against sources`;
 
   return (
     <Screen
@@ -43,7 +53,7 @@ export default function Working() {
         finished ? (
           <Animated.View entering={instant ? undefined : FadeInUp.duration(300)}>
             <Button
-              label="See the plan"
+              label="See the ideas"
               onPress={() => router.push("/plan/summary")}
               icon={<ArrowRight size={20} color={colors.bg} />}
             />
@@ -69,16 +79,16 @@ export default function Working() {
             accessibilityLiveRegion="polite"
             className={cn("flex-1", ready ? "text-good" : "text-accent")}
           >
-            {ready ? "Plan ready" : "Huddle is working"}
+            {ready ? "Ideas ready" : "Huddle is working"}
           </Label>
-          <AvatarStack members={trip.members} size="sm" max={5} />
+          <AvatarStack members={brief.members} size="sm" max={5} />
         </View>
 
         <View className="gap-1">
-          {/* No city yet: the group picks one on the summary screen. */}
-          <Title>Planning the {trip.sourceChat.name} trip</Title>
+          {/* No city yet: the group picks one on /plan/destinations. */}
+          <Title>Planning the {brief.sourceChat.name} trip</Title>
           <Muted>
-            {trip.dates.label} · from {trip.sourceChat.name}
+            {brief.dates.label} · {brief.members.length} people
           </Muted>
         </View>
 
@@ -99,7 +109,13 @@ export default function Working() {
         {visible.map((step, i) => (
           <StepRow key={step.id} step={step} status={status(i)} />
         ))}
-        {ready ? <ReadyRow summary={summary} animate={!instant} /> : null}
+        {ready ? (
+          <ReadyRow
+            title={`${destinationSuggestions.length} destination ideas`}
+            summary={summary}
+            animate={!instant}
+          />
+        ) : null}
       </ScrollView>
     </Screen>
   );

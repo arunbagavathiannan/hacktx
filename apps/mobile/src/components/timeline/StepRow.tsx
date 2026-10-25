@@ -14,6 +14,7 @@ import Animated, {
 } from "react-native-reanimated";
 import { Skeleton } from "@/components/ui";
 import { cn } from "@/lib/cn";
+import type { AgentStepResult } from "@/mocks/types";
 import { colors } from "@/theme";
 import { toolIcons } from "./toolIcons";
 import {
@@ -77,6 +78,34 @@ type Props = {
   status: PlaybackStatus;
 };
 
+// One line per option the tool found (e.g. per destination idea), hairline-separated.
+function Results({ results }: { results: AgentStepResult[] }) {
+  return (
+    <View className="mt-2 border-t border-line">
+      {results.map((r) => (
+        <View key={r.label} className="flex-row items-baseline gap-2 border-b border-line py-1.5">
+          <Text className="font-body-semibold text-sm text-ink">{r.label}</Text>
+          {r.note ? (
+            <Text numberOfLines={1} className="flex-1 font-body text-sm text-muted">
+              {r.note}
+            </Text>
+          ) : (
+            <View className="flex-1" />
+          )}
+          {r.value ? (
+            <Text
+              className="font-body-bold text-sm text-ink"
+              style={{ fontVariant: ["tabular-nums"] }}
+            >
+              {r.value}
+            </Text>
+          ) : null}
+        </View>
+      ))}
+    </View>
+  );
+}
+
 // One tool call in the "Huddle is working" timeline. Every step connects down to the next
 // one, and the last one to the closing "Plan ready" row.
 export function StepRow({ step, status }: Props) {
@@ -131,6 +160,7 @@ export function StepRow({ step, status }: Props) {
               >
                 {failed ? (step.fallback ?? "Skipped. Huddle kept going without it.") : step.detail}
               </Text>
+              {!failed && step.results?.length ? <Results results={step.results} /> : null}
             </Animated.View>
           )}
         </View>
@@ -140,7 +170,15 @@ export function StepRow({ step, status }: Props) {
 }
 
 // Closing row: the last connector lands on a green node that pops, then "Plan ready".
-export function ReadyRow({ summary, animate }: { summary: string; animate: boolean }) {
+export function ReadyRow({
+  summary,
+  animate,
+  title = "Plan ready",
+}: {
+  summary: string;
+  animate: boolean;
+  title?: string;
+}) {
   const pop = useSharedValue(animate ? 0.6 : 1);
   useEffect(() => {
     if (!animate) return;
@@ -153,14 +191,14 @@ export function ReadyRow({ summary, animate }: { summary: string; animate: boole
 
   return (
     <Animated.View entering={animate ? FadeIn.duration(200) : undefined}>
-      <View accessible accessibilityLabel={`Plan ready. ${summary}`} className="flex-row gap-4">
+      <View accessible accessibilityLabel={`${title}. ${summary}`} className="flex-row gap-4">
         <Animated.View style={style}>
           <View className="h-11 w-11 items-center justify-center rounded-full bg-good">
             <Sparkle size={20} color={colors.bg} weight="fill" />
           </View>
         </Animated.View>
         <View className="flex-1 gap-1 pt-1">
-          <Text className="font-display text-lg leading-6 text-ink">Plan ready</Text>
+          <Text className="font-display text-lg leading-6 text-ink">{title}</Text>
           <Text className="font-body text-sm leading-5 text-muted">{summary}</Text>
         </View>
       </View>

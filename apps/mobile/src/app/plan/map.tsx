@@ -1,5 +1,5 @@
 import { LinearGradient } from "expo-linear-gradient";
-import { router, useLocalSearchParams } from "expo-router";
+import { Redirect, router, useLocalSearchParams } from "expo-router";
 import { ArrowRight, CaretLeft } from "phosphor-react-native";
 import { useMemo, useState } from "react";
 import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
@@ -23,34 +23,52 @@ import { RouteView } from "@/components/route/RouteView";
 import { type MapView, ViewToggle } from "@/components/route/ViewToggle";
 import { AvatarStack, Button, Chip, Heading, Muted } from "@/components/ui";
 import { estimatePerPerson, groupSize, nightsBetween } from "@/lib/pricing";
-import { flights, members, places, trip } from "@/mocks";
+import { places as denverPlaces, members } from "@/mocks";
+import { destinationSuggestions } from "@/mocks/destinations";
 import { multiFlights, multiTrip } from "@/mocks/multi";
-import { isDriving, togglePlace, usePlan, withFlight } from "@/store/plan";
+import { isDriving, togglePlace, useDestination, usePlan, withFlight } from "@/store/plan";
 import { colors } from "@/theme";
 
 // Room on the map for the overlays: filter chips on top, the flights row at the bottom.
 const MAP_INSETS = { top: 96, right: 52, bottom: 132, left: 52 };
 
 // Every flight id any trip on this screen knows, so flight picks never count as places.
-const ALL_FLIGHT_IDS = new Set([...flights, ...multiFlights].map((f) => f.id));
+const ALL_FLIGHT_IDS = new Set(
+  [...destinationSuggestions.flatMap((d) => d.flights), ...multiFlights].map((f) => f.id),
+);
 
-// Step 7 of the demo: globe zooms into Denver, then the group picks options from the map.
+// Step 7 of the demo: globe zooms into the city the group picked on /plan/destinations, then
+// the group picks options from the map.
 // MOCK: demo-only screenshot states, not linked from anywhere in the app:
 // ?demo=globe (globe mid-zoom), ?demo=map (skip the intro), ?demo=callout (pin callout
-// open), ?demo=sheet (Red Rocks callout + details sheet open), ?demo=route (Route tab),
-// ?demo=multi (two-city route, mocks/multi.ts), ?demo=drive (as if the group answered
-// "Drive"). multi and drive are sandboxed: picks live in local state, never in usePlan,
-// and booking is off there (the booked screen only knows the real Denver plan).
-export default function MapScreen() {
+// open), ?demo=sheet (headline place's callout + details sheet open), ?demo=route (Route
+// tab), ?demo=multi (two-city Denver route, mocks/multi.ts), ?demo=drive (as if the group
+// answered "Drive"). multi and drive are sandboxed: picks live in local state, never in
+// usePlan, and booking is off there (the booked screen only knows the real plan).
+// Before the group picks a city there's no map to show, so it sends you to the picker. The
+// ?demo= states above skip that and show the leading idea (Denver).
+export default function MapRoute() {
+  const { demo } = useLocalSearchParams<{ demo?: string }>();
+  const chosen = usePlan((s) => s.destinationId);
+  if (!chosen && !demo) return <Redirect href="/plan/destinations" />;
+  return <MapScreen />;
+}
+
+function MapScreen() {
   const { demo } = useLocalSearchParams<{ demo?: string }>();
   const reduceMotion = useReducedMotion();
   const skipIntro =
     reduceMotion || ["map", "callout", "sheet", "route", "multi", "drive"].includes(demo ?? "");
 
+  const destination = useDestination();
   const isMulti = demo === "multi";
   const sandboxed = isMulti || demo === "drive";
-  const activeTrip = isMulti ? multiTrip : trip;
-  const tripFlights = isMulti ? multiFlights : flights;
+  const activeTrip = isMulti ? multiTrip : destination.trip;
+  const tripFlights = isMulti ? multiFlights : destination.flights;
+  const places = isMulti ? denverPlaces : destination.places;
+  // MOCK: demo-only. The callout demo opens a food pin (Sushi Den in Denver).
+  const calloutId =
+    places.find((p) => p.id === "d3")?.id ?? places.find((p) => p.category === "food")?.id;
 
   const [introDone, setIntroDone] = useState(false);
   const revealed = skipIntro || introDone;
@@ -61,9 +79,15 @@ export default function MapScreen() {
   // selectedId shows a pin's callout; detailsId opens the full PlaceSheet (from the callout).
   // MOCK: demo-only initial states for ?demo=callout and ?demo=sheet.
   const [selectedId, setSelectedId] = useState<string | null>(
-    demo === "sheet" ? "a1" : demo === "callout" ? "d3" : null,
+    demo === "sheet"
+      ? destination.headlinePlaceId
+      : demo === "callout"
+        ? (calloutId ?? null)
+        : null,
   );
-  const [detailsId, setDetailsId] = useState<string | null>(demo === "sheet" ? "a1" : null);
+  const [detailsId, setDetailsId] = useState<string | null>(
+    demo === "sheet" ? destination.headlinePlaceId : null,
+  );
 
   const storePicks = usePlan((s) => s.picks);
   const answers = usePlan((s) => s.answers);
@@ -101,7 +125,7 @@ export default function MapScreen() {
 
   const shownPlaces = useMemo(
     () => (filter === "all" ? places : places.filter((p) => p.category === filter)),
-    [filter],
+    [filter, places],
   );
   const sheetPlace = places.find((p) => p.id === detailsId) ?? null;
   const sheetPicked = sheetPlace ? picks.includes(sheetPlace.id) : false;
@@ -156,7 +180,9 @@ export default function MapScreen() {
           <Pressable
             accessibilityRole="button"
             accessibilityLabel="Back"
-            onPress={() => (router.canGoBack() ? router.back() : router.replace("/plan/summary"))}
+            onPress={() =>
+              router.canGoBack() ? router.back() : router.replace("/plan/destinations")
+            }
             hitSlop={8}
             className="h-10 w-10 items-center justify-center rounded-full border border-line bg-surface active:opacity-80"
           >

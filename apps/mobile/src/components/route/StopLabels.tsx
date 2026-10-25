@@ -13,6 +13,9 @@ type Panel = {
 type Props = Panel & {
   points: GlobePoint[];
   projection: ScreenProjection; // from the globe once it settles; points in `points` order
+  // Optional: index in `points` of the one stop to emphasize (the destination picker); other
+  // stops dim. Labels keep their places, so nothing jumps when it changes.
+  activeIndex?: number;
 };
 
 // Above this many labels the exhaustive search (4^n) gets slow, so every label just takes
@@ -125,7 +128,7 @@ function layoutLabels(points: GlobePoint[], projection: ScreenProjection, panel:
 
 // City + airport labels drawn over the route globe (plain RN text: sharp on a projector,
 // no textures in the GL scene).
-export function StopLabels({ points, projection, width, height, bottomInset }: Props) {
+export function StopLabels({ points, projection, width, height, bottomInset, activeIndex }: Props) {
   // Only redo the search when the globe reports new positions or the panel changes, not on
   // every RouteView render (a flight pick re-renders it).
   const boxes = useMemo(
@@ -138,6 +141,8 @@ export function StopLabels({ points, projection, width, height, bottomInset }: P
         const box = boxes[i];
         if (!box) return null;
         const tint = p.kind === "origin" ? colors.gold : colors.accent;
+        const dim = activeIndex !== undefined && p.kind === "stop" && i !== activeIndex;
+        const lit = activeIndex !== undefined && i === activeIndex;
         return (
           <Animated.View
             key={`${p.kind}-${p.code ?? p.name}`}
@@ -153,7 +158,7 @@ export function StopLabels({ points, projection, width, height, bottomInset }: P
           >
             <View
               className="h-full flex-row items-center gap-1.5 rounded-full border bg-bg/90 px-2.5"
-              style={{ borderColor: `${tint}66` }}
+              style={{ borderColor: lit ? tint : `${tint}66`, opacity: dim ? 0.5 : 1 }}
             >
               {p.code ? (
                 <Text className="font-body-bold text-[13px] tracking-wide" style={{ color: tint }}>
