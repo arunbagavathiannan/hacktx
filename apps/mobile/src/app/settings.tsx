@@ -15,7 +15,7 @@ import { demoPrefs } from "@/components/summary/personalize";
 import { Button, IconButton, Label, Muted, Screen, Title } from "@/components/ui";
 import type { Preferences } from "@/mocks/types";
 import { usePlan } from "@/store/plan";
-import { usePreferences, usePreferencesHydrated } from "@/store/preferences";
+import { usePreferences } from "@/store/preferences";
 import { colors, icon } from "@/theme";
 
 const NOT_SET = "Not set";
@@ -39,7 +39,6 @@ export default function Settings() {
   // MOCK: `?demo=prefs` shows sample preferences and `?demo=reset` opens the reset confirm
   // (PR screenshots from a fresh browser). Display-only: nothing is written to the stores.
   const { demo } = useLocalSearchParams<{ demo?: string }>();
-  const hydrated = usePreferencesHydrated();
   const vibes = usePreferences((s) => s.vibes);
   const budget = usePreferences((s) => s.budget);
   const food = usePreferences((s) => s.food);
@@ -47,8 +46,6 @@ export default function Settings() {
   const prefs: Preferences =
     demo === "prefs" || demo === "reset" ? demoPrefs : { vibes, budget, food, maxTravel };
   const [confirming, setConfirming] = useState(demo === "reset");
-
-  if (!hydrated) return <View className="flex-1 bg-bg" />;
 
   const goBack = () => (router.canGoBack() ? router.back() : router.replace("/"));
 
