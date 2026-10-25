@@ -26,6 +26,8 @@ export function ProgressBar({ step, keys }: { step: number; keys: readonly strin
   return (
     <View
       className="flex-1 flex-row gap-1.5"
+      accessible
+      accessibilityLabel={`Question ${step + 1} of ${keys.length}`}
       accessibilityRole="progressbar"
       accessibilityValue={{ min: 1, max: keys.length, now: step + 1 }}
     >

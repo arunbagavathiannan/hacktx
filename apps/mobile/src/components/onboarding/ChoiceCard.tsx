@@ -1,5 +1,5 @@
-import { Pressable, Text, View } from "react-native";
-import { Muted } from "@/components/ui";
+import { Pressable, View } from "react-native";
+import { Heading, Muted } from "@/components/ui";
 import { cn } from "@/lib/cn";
 
 type Props = {
@@ -31,13 +31,11 @@ export function ChoiceCard({ label, title, description, selected, onPress }: Pro
     >
       <View className="flex-1 gap-1">
         <View className="flex-row items-baseline gap-2">
-          <Text className="font-display-medium text-headline text-ink">{heading}</Text>
+          <Heading className="font-display-medium">{heading}</Heading>
           {tier ? (
-            <Text
-              className={cn("font-body-medium text-small", selected ? "text-accent" : "text-faint")}
-            >
+            <Muted className={cn("font-body-medium", selected ? "text-accent" : "text-faint")}>
               {tier}
-            </Text>
+            </Muted>
           ) : null}
         </View>
         {description ? <Muted>{description}</Muted> : null}

@@ -7,7 +7,7 @@ import {
   ShieldCheck,
 } from "phosphor-react-native";
 import { useState } from "react";
-import { Pressable, Text, View } from "react-native";
+import { Pressable, View } from "react-native";
 import { budgetOptions } from "@/components/onboarding/options";
 import { ResetConfirm } from "@/components/settings/ResetDemo";
 import { SettingRow } from "@/components/settings/SettingRow";
@@ -92,7 +92,7 @@ export default function Settings() {
             onPress={() => router.push("/onboarding?edit=1")}
             className="-my-3.5 -mr-3 min-h-12 justify-center px-3 active:opacity-60"
           >
-            <Text className="font-body-semibold text-label text-accent">Edit</Text>
+            <Label className="text-accent">Edit</Label>
           </Pressable>
         </View>
         <View>

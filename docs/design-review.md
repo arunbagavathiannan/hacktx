@@ -157,7 +157,7 @@ Shots: `shots/plan-booked.png`, `shots/plan-booked-demo-card.png`. **The last fr
 
 Shot: `shots/settings.png`. Off the demo path, so lowest priority.
 
-- Four eyebrows, three cards, icon wells on every row, a Sparkle for "Vibe". **Fix:** sentence-case section headings via the new `Label`, rows without icon wells (title muted small, value body semibold), hairline dividers, no cards. The privacy list (green line icons) is good: keep it, but use `muted` icons instead of `good` green so green stays a success color.
+- Four eyebrows, three cards, icon wells on every row, a Sparkle for "Vibe". **Fix:** sentence-case section headings via the new `Label`, rows without icon wells (label muted small, value body 400), hairline dividers, no cards. The privacy list (green line icons) is good: keep it, but use `muted` icons instead of `good` green so green stays a success color.
 
 ---
 

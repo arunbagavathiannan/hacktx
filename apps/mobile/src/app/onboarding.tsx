@@ -141,7 +141,7 @@ export default function Onboarding() {
           ) : null}
 
           {step === 1 ? (
-            <View className="gap-3">
+            <View accessibilityRole="radiogroup" accessibilityLabel={title} className="gap-3">
               {budgetOptions.map((o) => (
                 <ChoiceCard
                   key={o.label}
@@ -169,7 +169,7 @@ export default function Onboarding() {
           ) : null}
 
           {step === 3 ? (
-            <View className="gap-3">
+            <View accessibilityRole="radiogroup" accessibilityLabel={title} className="gap-3">
               {travelOptions.map((o) => (
                 <ChoiceCard
                   key={o.label}
