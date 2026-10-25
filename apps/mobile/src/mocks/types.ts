@@ -96,6 +96,8 @@ export type AgentStep = {
   id: string;
   tool:
     | "extract_trip"
+    | "apply_preferences"
+    | "suggest_destinations"
     | "search_flights"
     | "search_hotels"
     | "search_places"

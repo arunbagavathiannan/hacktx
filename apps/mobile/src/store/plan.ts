@@ -5,7 +5,10 @@ import { flights, places, trip } from "@/mocks";
 type State = {
   answers: Record<string, string>; // Clarification.id -> chosen option
   picks: string[]; // Place.id / Flight.id the user added to the plan
+  // DestinationSuggestion.id the group chose on the summary screen; null until they choose.
+  destinationId: string | null;
   answer: (clarificationId: string, option: string) => void;
+  chooseDestination: (id: string) => void;
   // Places toggle on and off. Flights are radio: the group flies on the same plane, so
   // picking one replaces any other flight in the plan.
   togglePick: (id: string) => void;
@@ -52,13 +55,15 @@ function defaultPicks() {
 export const usePlan = create<State>()((set) => ({
   answers: {},
   picks: defaultPicks(),
+  destinationId: null,
   answer: (clarificationId, option) =>
     set((s) => ({ answers: { ...s.answers, [clarificationId]: option } })),
+  chooseDestination: (id) => set({ destinationId: id }),
   togglePick: (id) =>
     set((s) => {
       if (FLIGHT_IDS.includes(id)) return { picks: withFlight(s.picks, id, FLIGHT_IDS) };
       return { picks: togglePlace(s.picks, id) };
     }),
   pickFlight: (id, among = FLIGHT_IDS) => set((s) => ({ picks: withFlight(s.picks, id, among) })),
-  reset: () => set({ answers: {}, picks: defaultPicks() }),
+  reset: () => set({ answers: {}, picks: defaultPicks(), destinationId: null }),
 }));

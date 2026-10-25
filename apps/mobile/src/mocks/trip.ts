@@ -81,47 +81,56 @@ export const trip: Trip = {
   why: "Red Rocks show on the 15th",
 };
 
+// The agent doesn't pick a city: it suggests a few (mocks/destinations.ts) and the group
+// chooses on the summary screen.
 export const agentSteps: AgentStep[] = [
   {
     id: "s1",
     tool: "extract_trip",
     label: "Reading the chat",
-    detail: "Denver · Nov 13–15 · 5 people · under $400 each",
+    detail: "5 people · Fri–Sun, Nov 13–15 · under $400 each",
     durationMs: 1400,
   },
   {
     id: "s2",
-    tool: "search_flights",
-    label: "Searching flights AUS → DEN",
-    detail: "Found 14 flights · best $142 round trip",
-    durationMs: 2000,
+    tool: "apply_preferences",
+    label: "Applying your preferences",
+    detail: "Your vibe, budget, and food picks from onboarding",
+    durationMs: 1000,
   },
   {
     id: "s3",
-    tool: "search_hotels",
-    label: "Finding a place for 5",
-    detail: "2 rooms for 5 at Kimpton Hotel Born · $175 each",
+    tool: "suggest_destinations",
+    label: "Finding where to go",
+    detail: "3 ideas from the chat: Denver, New Orleans, Nashville",
     durationMs: 1800,
   },
   {
     id: "s4",
-    tool: "search_places",
-    label: "Finding food and things to do",
-    detail: "Red Rocks, Meow Wolf, Milk Market and 9 more",
-    durationMs: 1800,
+    tool: "search_flights",
+    label: "Checking flights from AUS",
+    detail: "Round trips for all 3 ideas · Denver from $142",
+    durationMs: 2000,
   },
   {
     id: "s5",
-    tool: "pin_on_map",
-    label: "Pinning options on the map",
-    detail: "15 places pinned",
-    durationMs: 1000,
+    tool: "search_hotels",
+    label: "Finding places to stay for 5",
+    detail: "Rooms for 5 in each city · Denver from $175 each",
+    durationMs: 1800,
   },
   {
     id: "s6",
+    tool: "search_places",
+    label: "Finding food and things to do",
+    detail: "Top spots for each idea, ready for the map",
+    durationMs: 1600,
+  },
+  {
+    id: "s7",
     tool: "verify",
     label: "Double-checking prices and dates",
-    detail: "Prices match sources · $382 each, under the $400 budget",
+    detail: "Prices match sources · Denver comes to $382 each, under $400",
     durationMs: 1500,
   },
 ];
@@ -131,7 +140,8 @@ export const clarifications: Clarification[] = [
     id: "c1",
     question: "Fly or drive?",
     options: ["Fly", "Drive", "Either"],
-    reason: "Austin → Denver is a 13-hour drive, and nobody said how you're getting there.",
+    reason:
+      "All three ideas are long drives from Austin, and nobody said how you're getting there.",
   },
 ];
 
