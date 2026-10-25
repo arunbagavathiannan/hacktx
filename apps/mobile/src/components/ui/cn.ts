@@ -33,8 +33,7 @@ const twMerge = extendTailwindMerge({
   },
 });
 
-// Same as @/lib/cn, plus the type roles. Used by the ui primitives.
-// TODO(after this PR): point @/lib/cn at this so screens get the same merge rules.
+// The app's one class-merge helper; @/lib/cn re-exports it.
 export function cn(...classes: Array<string | false | null | undefined>) {
   return twMerge(classes.filter(Boolean).join(" "));
 }
