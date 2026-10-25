@@ -1,10 +1,9 @@
 import { router, useLocalSearchParams } from "expo-router";
-import { ArrowRight, Sparkle } from "phosphor-react-native";
+import { ArrowRight } from "phosphor-react-native";
 import { useEffect, useMemo, useState } from "react";
 import { View } from "react-native";
 import Animated from "react-native-reanimated";
 import { prefetchMapTiles } from "@/components/map/MapCanvas";
-import { ClarificationCard } from "@/components/summary/ClarificationCard";
 import { DestinationTeaser } from "@/components/summary/DestinationTeaser";
 import {
   demoPrefs,
@@ -13,8 +12,10 @@ import {
   preferenceLines,
   tripContext,
 } from "@/components/summary/personalize";
+import { QuickQuestion } from "@/components/summary/QuickQuestion";
 import { TripFacts } from "@/components/summary/TripFacts";
-import { Badge, Body, Button, Label, Muted, Screen, Title } from "@/components/ui";
+import { Button, Display, Muted, Perforation, Screen } from "@/components/ui";
+import { cn } from "@/lib/cn";
 import { brief, clarifications } from "@/mocks";
 import { destinationSuggestions } from "@/mocks/destinations";
 import type { Preferences } from "@/mocks/types";
@@ -123,9 +124,12 @@ export default function Summary() {
       ? `Answer ${remaining} quick question${remaining === 1 ? "" : "s"} to see where to go`
       : null;
 
+  const hasStub = clarifications.length > 0 || lines.length > 0;
+
   return (
     <Screen
       scroll
+      className="gap-8"
       footer={
         <View className="gap-2">
           {blocker ? <Muted className="text-center">{blocker}</Muted> : null}
@@ -139,61 +143,54 @@ export default function Summary() {
       }
     >
       <Animated.View entering={enter(0)}>
-        <View className="gap-3 pt-4">
-          <Badge
-            label={`From ${brief.sourceChat.name} on ${appName[brief.sourceChat.app]}`}
-            tone="accent"
-          />
-          <Title className="text-4xl leading-[44px]">
+        <View className="gap-2 pt-4">
+          <Display accessibilityRole="header">
             {destination ? destination.trip.title : brief.title}
-          </Title>
-          <View className="flex-row items-center gap-2">
-            <Sparkle size={18} color={colors.gold} weight={icon.activeWeight} />
-            <Body className="flex-1 text-muted">
-              {destination ? destination.trip.why : brief.why}
-            </Body>
-          </View>
+          </Display>
+          <Muted>
+            From {brief.sourceChat.name} on {appName[brief.sourceChat.app]} ·{" "}
+            {destination ? destination.trip.why : brief.why}
+          </Muted>
         </View>
       </Animated.View>
 
+      {/* The screen's one ticket: what's decided above the perforation, what's left below. */}
       <Animated.View entering={enter(1)}>
-        <TripFacts trip={brief} destination={destination} ideas={destinationSuggestions.length} />
+        <View className="overflow-hidden rounded-card bg-surface">
+          <TripFacts trip={brief} destination={destination} ideas={destinationSuggestions.length} />
+          {hasStub ? (
+            <>
+              <Perforation notchColor={colors.bg} />
+              <View className="gap-5 px-5 pb-5 pt-2">
+                {clarifications.map((c) => (
+                  <QuickQuestion
+                    key={c.id}
+                    clarification={c}
+                    answer={shown(c.id)}
+                    fromPreferences={fromPreferences(c.id)}
+                    hint={preferenceHint(c, prefs)}
+                    onAnswer={(o) => onAnswer(c.id, o)}
+                  />
+                ))}
+                {lines.length > 0 ? (
+                  <View
+                    className={cn(
+                      "gap-1",
+                      clarifications.length > 0 && "border-t border-line pt-4",
+                    )}
+                  >
+                    {lines.map((line) => (
+                      <Muted key={line}>{line}</Muted>
+                    ))}
+                  </View>
+                ) : null}
+              </View>
+            </>
+          ) : null}
+        </View>
       </Animated.View>
 
-      {lines.length > 0 ? (
-        <Animated.View entering={enter(2)}>
-          <View className="gap-1.5 px-1">
-            {lines.map((line) => (
-              <View key={line} className="flex-row items-center gap-2">
-                <Sparkle size={14} color={colors.accent} weight={icon.weight} />
-                <Muted className="flex-1">{line}</Muted>
-              </View>
-            ))}
-          </View>
-        </Animated.View>
-      ) : null}
-
-      {clarifications.length > 0 ? (
-        <Animated.View entering={enter(3)}>
-          <View className="gap-3">
-            <Label>
-              {clarifications.length === 1 ? "One quick question" : "A few quick questions"}
-            </Label>
-            {clarifications.map((c) => (
-              <ClarificationCard
-                key={c.id}
-                clarification={c}
-                answer={shown(c.id)}
-                fromPreferences={fromPreferences(c.id)}
-                hint={preferenceHint(c, prefs)}
-                onAnswer={(o) => onAnswer(c.id, o)}
-              />
-            ))}
-          </View>
-        </Animated.View>
-      ) : null}
-
-      <Animated.View entering={enter(4)}>
+      <Animated.View entering={enter(2)}>
         <DestinationTeaser ideas={ideas} budgetPerPerson={brief.budgetPerPerson} />
       </Animated.View>
     </Screen>
