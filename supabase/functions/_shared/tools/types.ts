@@ -18,11 +18,27 @@ export interface Place {
   lng?: number;
 }
 
+// A real way to book one option, from SerpAPI (Google Flights booking options or Google
+// Hotels property prices). Huddle links out; it never takes payment.
+export interface BookingOffer {
+  ref: string;
+  seller: string;
+  // Per person for flights, the whole stay for one room for hotels.
+  priceCents: number;
+  url?: string;
+  phone?: string;
+  official?: boolean;
+  // Google Flights hands off with a POST (open it as a form submit).
+  bookingRequest?: { url: string; post_data: string };
+}
+
 export interface Booking {
   confirmationCode: string;
   refs: string[];
   totalCents: number;
   createdAt: string;
+  // Cheapest live offer first, per option. Empty without SerpAPI.
+  offers: BookingOffer[];
 }
 
 // extract_trip output, stored in plans.trip.
@@ -125,6 +141,8 @@ export interface Tool<A = ToolArgs> {
   parameters: JsonSchema;
   // One line for agent_steps.input_summary ("Searching flights AUS → DEN").
   describe(args: A): string;
+  // Overrides runTool's default 8 s limit (book makes several SerpAPI calls).
+  timeoutMs?: number;
   run(args: A, ctx: ToolContext): Promise<ToolResult>;
 }
 

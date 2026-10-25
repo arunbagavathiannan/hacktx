@@ -1,5 +1,5 @@
 // Runs the demo path's tool calls in order against an in-memory store.
-// deno test supabase/functions/_shared/tools/
+// deno test --allow-env supabase/functions/_shared/tools/
 
 import { assert, assertEquals, assertMatch } from "jsr:@std/assert@1";
 import { demoChat } from "../mocks/demo-trip.ts";
@@ -86,14 +86,16 @@ Deno.test("demo path: extract → search → pin → poll → tally → book", a
   assert(tally.ok, tally.summary);
   assertMatch(tally.summary, /wins with 2 of 3 votes$/);
   assertEquals(store.options.filter((o) => o.category === "hotel" && o.isSelected).length, 1);
-  assertEquals(plan.status, "ready");
+  // Not ready yet: only the agent loop marks it ready, after the verifier passes.
+  assertEquals(plan.status, "voting");
+  assertEquals((tally.data as { all_polls_decided: boolean }).all_polls_decided, true);
 
   const hotel = store.options.find((o) => o.isSelected) ?? store.options[0];
 
   // Guardrail: no booking until the user taps Book.
   const early = await call("book", { refs: ["flight_1", hotel.ref] });
   assert(!early.ok);
-  assertEquals(plan.status, "ready");
+  assertEquals(plan.status, "voting");
 
   ctx.bookingConfirmed = true;
   const booked = await call("book", { refs: ["flight_1", hotel.ref] });

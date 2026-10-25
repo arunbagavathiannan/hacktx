@@ -11,24 +11,25 @@ arguments), a `describe` line for the timeline, and a handler. `index.ts` export
 | Tool | Does | Mock? |
 |---|---|---|
 | `extract_trip` | Who / where / when / budget from the chat → `plans.trip` | MOCK: demo trip (people from real senders) |
-| `search_flights` | Google Flights via SerpAPI | MOCK: fixture, AUS → DEN only |
-| `search_hotels` | Google Hotels via SerpAPI | MOCK: fixture, Denver only |
-| `search_places` | Google Places restaurants / activities | MOCK: fixture, Denver only |
+| `search_flights` | SerpAPI `google_flights` | live with `SERPAPI_API_KEY`; else fixture (AUS → DEN) |
+| `search_hotels` | SerpAPI `google_hotels` | live with `SERPAPI_API_KEY`; else fixture (Denver) |
+| `search_places` | SerpAPI `google_maps` (restaurants / activities) | live with `SERPAPI_API_KEY`; else fixture (Denver) |
 | `pin_on_map` | Saves chosen results to `plan_options` (map pins + vote options) | real |
 | `create_poll` | Opens a vote on a category's pinned options | seeds other members' votes (MOCK) |
 | `tally_votes` | Counts votes, marks the winner, sets the plan `ready` | real |
 | `ask_user` | Sets `pending_question`, plan `needs_input` | real |
-| `book` | Confirmation code + total; refuses unless the user tapped Book | MOCK: no real booking |
+| `book` | Live SerpAPI booking options (Google Flights sellers, Google Hotels site prices) with links, cheapest first; total + confirmation code; refuses unless the user tapped Book | MOCK: confirmation code only; no payment (links out to book) |
 
 Search results get a `ref` (`hotel_2`). The model uses refs for every later call.
 
-Fixtures in `../mocks/` use the real API response shapes, so going live means replacing the
-fixture read with a `fetch`. Keys (Muse Spark, SerpAPI, Google) come from Supabase secrets
+Searches go through `../serpapi.ts`. If a live call fails, the tool falls back to the fixture in
+`../mocks/` (same response shape) when one exists, so the demo never shows an empty screen;
+`details.source` says which one was used. Keys (Muse Spark, SerpAPI) come from Supabase secrets
 via `Deno.env.get(...)`, never from the app.
 
 Tools read and write through `PlanStore` (`store.ts`): `supabaseStore(client)` in the Edge
 Function, `memoryStore(plan)` in tests.
 
 ```sh
-deno test supabase/functions/_shared/tools/
+deno test --allow-env supabase/functions/_shared/tools/
 ```

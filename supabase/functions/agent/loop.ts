@@ -1,5 +1,6 @@
 import type { ChatModel, LlmMessage } from "../_shared/muse.ts";
 import { describeCall, runTool, toolDefinitions } from "../_shared/tools/index.ts";
+import { pollsDecided } from "../_shared/tools/tally_votes.ts";
 import type { PlanStatus, ToolContext } from "../_shared/tools/types.ts";
 import type { StepLog } from "./steps.ts";
 import { verify } from "./verifier.ts";
@@ -115,8 +116,16 @@ export async function runAgent(deps: AgentDeps): Promise<AgentResult> {
         `All ${verdict.checked} options check out · ~$${verdict.perPersonUsd} each` +
           (budget ? `, under $${budget}` : ""),
       );
-      if (current.status === "planning")
-        await ctx.store.updatePlan(ctx.planId, { status: "ready" });
+      // Ready only now that it's verified, and only if no poll is still waiting on votes.
+      const decided = pollsDecided(options, await ctx.store.listVotes(ctx.planId));
+      const ready = current.status === "planning" || (current.status === "voting" && decided);
+      const summary = pass.text.trim() || undefined;
+      if (ready || summary) {
+        await ctx.store.updatePlan(ctx.planId, {
+          ...(ready ? { status: "ready" as const } : {}),
+          ...(summary ? { summary } : {}),
+        });
+      }
       const status = (await ctx.store.getPlan(ctx.planId)).status;
       return { status, toolCalls: calls, verified: true, message: pass.text };
     }

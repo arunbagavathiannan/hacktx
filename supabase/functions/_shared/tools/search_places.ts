@@ -1,5 +1,10 @@
-import { placesDenverActivities, placesDenverRestaurants } from "../mocks/google-places.ts";
-import { addFound, clampResults, count, defineTool, forModel, requireDemoCity } from "./helpers.ts";
+import {
+  type MapsResponse,
+  mapsDenverActivities,
+  mapsDenverRestaurants,
+} from "../mocks/serpapi-maps.ts";
+import { liveOrFixture, serpapi } from "../serpapi.ts";
+import { addFound, clampResults, count, defineTool, forModel, isDemoCity } from "./helpers.ts";
 import type { Option } from "./types.ts";
 
 interface Args {
@@ -9,18 +14,15 @@ interface Args {
   max_results?: number;
 }
 
-const priceSymbols: Record<string, string> = {
-  PRICE_LEVEL_INEXPENSIVE: "$",
-  PRICE_LEVEL_MODERATE: "$$",
-  PRICE_LEVEL_EXPENSIVE: "$$$",
-  PRICE_LEVEL_VERY_EXPENSIVE: "$$$$",
-};
+const mapsUrl = (title: string, location: string, placeId?: string) =>
+  `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(`${title} ${location}`)}` +
+  (placeId && !placeId.startsWith("mock_") ? `&query_place_id=${placeId}` : "");
 
 export const searchPlaces = defineTool<Args>({
   name: "search_places",
   description:
-    "Search Google Places for restaurants or things to do near the destination. Returns " +
-    "options with a `ref` to use in pin_on_map. Places have no fixed price.",
+    "Search Google Maps (via SerpAPI) for restaurants or things to do near the destination. " +
+    "Returns options with a `ref` to use in pin_on_map. Places have no fixed price.",
   parameters: {
     type: "object",
     properties: {
@@ -35,37 +37,49 @@ export const searchPlaces = defineTool<Args>({
   describe: (a) =>
     `Finding ${a.kind === "restaurant" ? "places to eat" : "things to do"} in ${a.location}`,
   async run(args, ctx) {
-    // MOCK: fixture response. Swap for a POST to https://places.googleapis.com/v1/places:searchText.
-    requireDemoCity(args.location, "places");
-    const res = args.kind === "restaurant" ? placesDenverRestaurants : placesDenverActivities;
-    const places = [...res.places]
-      .sort((a, b) => b.rating - a.rating)
+    const { data: res, source } = await liveOrFixture<MapsResponse>(
+      "places",
+      () =>
+        serpapi("google_maps", {
+          type: "search",
+          q: `${args.query} in ${args.location}`,
+        }),
+      // MOCK: fixture for the demo city only.
+      () =>
+        isDemoCity(args.location)
+          ? args.kind === "restaurant"
+            ? mapsDenverRestaurants
+            : mapsDenverActivities
+          : null,
+    );
+
+    const places = (res.local_results ?? [])
+      .filter((p) => p.gps_coordinates)
+      .sort((a, b) => (b.rating ?? 0) - (a.rating ?? 0))
       .slice(0, clampResults(args.max_results));
 
     const options = addFound(
       ctx,
-      places.map((p): Omit<Option, "ref"> => {
-        const price = p.priceLevel ? priceSymbols[p.priceLevel] : undefined;
-        return {
+      places.map(
+        (p): Omit<Option, "ref"> => ({
           category: args.kind,
-          title: p.displayName.text,
-          subtitle: [p.primaryTypeDisplayName.text, price, `${p.rating}★`]
-            .filter(Boolean)
-            .join(" · "),
+          title: p.title,
+          subtitle: [p.type, p.price, p.rating && `${p.rating}★`].filter(Boolean).join(" · "),
           currency: "USD",
-          url: p.googleMapsUri,
-          lat: p.location.latitude,
-          lng: p.location.longitude,
+          url: mapsUrl(p.title, args.location, p.place_id),
+          imageUrl: p.thumbnail,
+          lat: p.gps_coordinates?.latitude,
+          lng: p.gps_coordinates?.longitude,
           details: {
-            source: "google_places",
-            place_id: p.id,
-            address: p.formattedAddress,
+            source: source === "serpapi" ? "serpapi_google_maps" : "fixture_google_maps",
+            place_id: p.place_id,
+            address: p.address,
             rating: p.rating,
-            user_rating_count: p.userRatingCount,
-            price_level: p.priceLevel,
+            reviews: p.reviews,
+            price: p.price,
           },
-        };
-      }),
+        }),
+      ),
     );
 
     return {

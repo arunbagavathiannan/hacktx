@@ -75,7 +75,7 @@ export async function runTool(name: string, rawArgs: string, ctx: ToolContext): 
     const result = await Promise.race([
       tool.run(args, ctx),
       new Promise<never>((_, reject) => {
-        timer = setTimeout(() => reject(new Error("timeout")), TIMEOUT_MS);
+        timer = setTimeout(() => reject(new Error("timeout")), tool.timeoutMs ?? TIMEOUT_MS);
       }),
     ]);
     return { ok: true, input, ...result };

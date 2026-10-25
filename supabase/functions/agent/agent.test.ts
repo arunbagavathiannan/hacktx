@@ -1,5 +1,5 @@
 // Runs the agent loop end to end with the scripted model and an in-memory store.
-// deno test supabase/functions/agent/
+// deno test --allow-env supabase/functions/agent/
 
 import { assert, assertEquals, assertMatch } from "jsr:@std/assert@1";
 import { demoChat } from "../_shared/mocks/demo-trip.ts";
@@ -47,6 +47,8 @@ Deno.test("demo run: 8 tool calls, verified, plan ready", async () => {
   assertEquals(result.status, "ready");
   assertEquals(plan.status, "ready");
   assertMatch(result.message, /^Denver, Nov 20–22/);
+  // The model's closing summary is saved for the app.
+  assertEquals(plan.summary, result.message);
 
   // Every step finished, in order, ending with the verifier.
   assertEquals(
@@ -139,4 +141,42 @@ Deno.test("the agent can't book on its own", async () => {
   assertEquals(book?.status, "failed");
   assert(plan.status !== "booked");
   assertEquals(plan.trip.booking, undefined);
+});
+
+Deno.test("a tallied plan that fails the verifier is never marked ready", async () => {
+  const { plan, log, run } = setup([
+    ["extract_trip", {}],
+    // Wrong check-in date, then a full poll + tally.
+    ["search_hotels", { ...stay, check_in_date: "2026-11-21" }],
+    ["pin_on_map", { refs: ["hotel_1", "hotel_2"] }],
+    ["create_poll", { category: "hotel", question: "Where should we stay?" }],
+    ["tally_votes", { category: "hotel" }],
+  ]);
+  const statusAfterTally: string[] = [];
+  const finish = log.finish;
+  log.finish = async (index, status, result) => {
+    if (log.steps[index].tool === "tally_votes") statusAfterTally.push(plan.status);
+    await finish(index, status, result);
+  };
+  const result = await run();
+
+  assertEquals(statusAfterTally, ["voting"]);
+  assert(!result.verified);
+  assertEquals(result.status, "needs_input");
+  // The unverified summary isn't shown to the group.
+  assert(!plan.summary?.startsWith("Denver, Nov 20–22"));
+});
+
+Deno.test("verified but a poll is still open: stays voting", async () => {
+  const { plan, run } = setup([
+    ["extract_trip", {}],
+    ["search_hotels", stay],
+    ["pin_on_map", { refs: ["hotel_1", "hotel_2"] }],
+    ["create_poll", { category: "hotel", question: "Where should we stay?" }],
+  ]);
+  const result = await run();
+
+  assert(result.verified);
+  assertEquals(plan.status, "voting");
+  assertMatch(plan.summary ?? "", /^Denver, Nov 20–22/);
 });

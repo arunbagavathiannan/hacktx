@@ -1,13 +1,6 @@
-import { serpapiHotelsDenver } from "../mocks/serpapi-hotels.ts";
-import {
-  addFound,
-  clampResults,
-  count,
-  defineTool,
-  forModel,
-  requireDemoCity,
-  usd,
-} from "./helpers.ts";
+import { type HotelsResponse, serpapiHotelsDenver } from "../mocks/serpapi-hotels.ts";
+import { liveOrFixture, serpapi } from "../serpapi.ts";
+import { addFound, clampResults, count, defineTool, forModel, isDemoCity, usd } from "./helpers.ts";
 import { type Option, ToolError } from "./types.ts";
 
 interface Args {
@@ -22,8 +15,8 @@ interface Args {
 export const searchHotels = defineTool<Args>({
   name: "search_hotels",
   description:
-    "Search hotels on Google Hotels. `price_usd` is the total for the stay for one room. " +
-    "Returns options with a `ref` to use in pin_on_map.",
+    "Search hotels on Google Hotels (via SerpAPI). `price_usd` is the total for the stay for " +
+    "one room. Returns options with a `ref` to use in pin_on_map.",
   parameters: {
     type: "object",
     properties: {
@@ -39,15 +32,34 @@ export const searchHotels = defineTool<Args>({
   },
   describe: (a) => `Searching hotels in ${a.location}`,
   async run(args, ctx) {
-    // MOCK: fixture response. Swap for a fetch to https://serpapi.com/search?engine=google_hotels.
-    requireDemoCity(args.location, "hotel");
-    const hotels = serpapiHotelsDenver.properties
+    const { data: res, source } = await liveOrFixture<HotelsResponse>(
+      "hotel",
+      () =>
+        serpapi("google_hotels", {
+          q: `Hotels in ${args.location}`,
+          check_in_date: args.check_in_date,
+          check_out_date: args.check_out_date,
+          adults: args.adults ?? 2,
+          max_price: args.max_price_per_night,
+          currency: "USD",
+        }),
+      // MOCK: fixture for the demo city only.
+      () => (isDemoCity(args.location) ? serpapiHotelsDenver : null),
+    );
+
+    const hotels = (res.properties ?? [])
+      .filter(
+        (h) =>
+          h.gps_coordinates &&
+          h.rate_per_night?.extracted_lowest !== undefined &&
+          h.total_rate?.extracted_lowest !== undefined,
+      )
       .filter(
         (h) =>
           args.max_price_per_night === undefined ||
-          h.rate_per_night.extracted_lowest <= args.max_price_per_night,
+          (h.rate_per_night?.extracted_lowest ?? 0) <= args.max_price_per_night,
       )
-      .sort((a, b) => b.overall_rating - a.overall_rating)
+      .sort((a, b) => (b.overall_rating ?? 0) - (a.overall_rating ?? 0))
       .slice(0, clampResults(args.max_results));
 
     if (hotels.length === 0) {
@@ -56,20 +68,31 @@ export const searchHotels = defineTool<Args>({
 
     const options = addFound(
       ctx,
-      hotels.map(
-        (h): Omit<Option, "ref"> => ({
+      hotels.map((h): Omit<Option, "ref"> => {
+        const perNight = h.rate_per_night?.extracted_lowest ?? 0;
+        const total = h.total_rate?.extracted_lowest ?? 0;
+        return {
           category: "hotel",
           title: h.name,
-          subtitle: `${h.rate_per_night.lowest}/night · ${h.overall_rating}★ · ${h.extracted_hotel_class}-star`,
-          priceCents: h.total_rate.extracted_lowest * 100,
+          subtitle: [
+            `${usd(perNight * 100)}/night`,
+            h.overall_rating && `${h.overall_rating}★`,
+            h.extracted_hotel_class && `${h.extracted_hotel_class}-star`,
+          ]
+            .filter(Boolean)
+            .join(" · "),
+          priceCents: total * 100,
           currency: "USD",
-          url: h.link,
-          lat: h.gps_coordinates.latitude,
-          lng: h.gps_coordinates.longitude,
+          url:
+            h.link ??
+            `https://www.google.com/travel/search?q=${encodeURIComponent(`${h.name} ${args.location}`)}`,
+          imageUrl: h.images?.[0]?.thumbnail,
+          lat: h.gps_coordinates?.latitude,
+          lng: h.gps_coordinates?.longitude,
           details: {
-            source: "serpapi_google_hotels",
-            rate_per_night: h.rate_per_night.extracted_lowest,
-            total_rate: h.total_rate.extracted_lowest,
+            source: source === "serpapi" ? "serpapi_google_hotels" : "fixture_google_hotels",
+            rate_per_night: perNight,
+            total_rate: total,
             overall_rating: h.overall_rating,
             reviews: h.reviews,
             hotel_class: h.extracted_hotel_class,
@@ -77,12 +100,14 @@ export const searchHotels = defineTool<Args>({
             description: h.description,
             check_in_date: args.check_in_date,
             check_out_date: args.check_out_date,
+            adults: args.adults ?? 2,
+            property_token: h.property_token,
           },
-        }),
-      ),
+        };
+      }),
     );
 
-    const cheapest = Math.min(...hotels.map((h) => h.rate_per_night.extracted_lowest));
+    const cheapest = Math.min(...hotels.map((h) => h.rate_per_night?.extracted_lowest ?? 0));
     return {
       summary: `Found ${count(options.length, "hotel")} from ${usd(cheapest * 100)}/night`,
       data: options.map(forModel),

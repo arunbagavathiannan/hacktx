@@ -1,4 +1,5 @@
-import { type SerpapiFlight, serpapiFlightsAusDen } from "../mocks/serpapi-flights.ts";
+import { type FlightsResponse, serpapiFlightsAusDen } from "../mocks/serpapi-flights.ts";
+import { liveOrFixture, serpapi } from "../serpapi.ts";
 import {
   addFound,
   clampResults,
@@ -26,8 +27,8 @@ const DEN_AIRPORT = { lat: 39.8561, lng: -104.6737 };
 export const searchFlights = defineTool<Args>({
   name: "search_flights",
   description:
-    "Search round-trip flights on Google Flights. Prices are per person, round trip, in USD. " +
-    "Returns options with a `ref` to use in pin_on_map.",
+    "Search round-trip flights on Google Flights (via SerpAPI). Prices are per person, round " +
+    "trip, in USD. Returns options with a `ref` to use in pin_on_map.",
   parameters: {
     type: "object",
     properties: {
@@ -43,22 +44,46 @@ export const searchFlights = defineTool<Args>({
   },
   describe: (a) => `Searching flights ${a.origin.toUpperCase()} → ${a.destination.toUpperCase()}`,
   async run(args, ctx) {
-    const route = `${args.origin.toUpperCase()}-${args.destination.toUpperCase()}`;
-    // MOCK: fixture response. Swap for a fetch to https://serpapi.com/search?engine=google_flights.
-    if (route !== "AUS-DEN") {
-      throw new ToolError(`Demo flight data only covers AUS → DEN, not ${route}.`);
-    }
-    const res = serpapiFlightsAusDen;
-    const all: SerpapiFlight[] = [...res.best_flights, ...res.other_flights];
+    const origin = args.origin.toUpperCase();
+    const destination = args.destination.toUpperCase();
 
-    const flights = all
+    const { data: res, source } = await liveOrFixture<FlightsResponse>(
+      "flight",
+      () =>
+        serpapi("google_flights", {
+          departure_id: origin,
+          arrival_id: destination,
+          outbound_date: args.outbound_date,
+          return_date: args.return_date,
+          type: 1,
+          stops: args.nonstop_only ? 1 : 0,
+          currency: "USD",
+        }),
+      // MOCK: fixture for the demo route only.
+      () => (origin === "AUS" && destination === "DEN" ? serpapiFlightsAusDen : null),
+    );
+
+    const flights = [...(res.best_flights ?? []), ...(res.other_flights ?? [])]
+      .filter((f) => f.price !== undefined && f.flights.length > 0)
       .filter((f) => !args.nonstop_only || f.flights.length === 1)
-      .sort((a, b) => a.price - b.price)
+      .sort((a, b) => (a.price ?? 0) - (b.price ?? 0))
       .slice(0, clampResults(args.max_results));
 
     if (flights.length === 0) {
-      throw new ToolError("No flights match. Try allowing a stop.");
+      throw new ToolError("No flights match. Try allowing a stop or other dates.");
     }
+
+    // Map pin at the destination: the airport for the demo route, else the trip's city.
+    const trip = (await ctx.store.getPlan(ctx.planId)).trip;
+    const pin =
+      destination === "DEN"
+        ? DEN_AIRPORT
+        : { lat: trip.destination?.lat, lng: trip.destination?.lng };
+    const searchUrl =
+      res.search_metadata?.google_flights_url ??
+      `https://www.google.com/travel/flights?q=${encodeURIComponent(
+        `Flights from ${origin} to ${destination} on ${args.outbound_date} through ${args.return_date}`,
+      )}`;
 
     const options = addFound(
       ctx,
@@ -70,15 +95,13 @@ export const searchFlights = defineTool<Args>({
           category: "flight",
           title: `${first.airline} · ${stops === 0 ? "Nonstop" : `${stops} stop`}`,
           subtitle: `${weekday(args.outbound_date)} ${clock(first.departure_airport.time)} → ${clock(last.arrival_airport.time)} · ${duration(f.total_duration)}`,
-          priceCents: f.price * 100,
+          priceCents: (f.price ?? 0) * 100,
           currency: "USD",
-          url: `https://www.google.com/travel/flights?q=${encodeURIComponent(
-            `Flights from ${args.origin} to ${args.destination} on ${args.outbound_date} through ${args.return_date}`,
-          )}`,
+          url: searchUrl,
           imageUrl: f.airline_logo,
-          ...DEN_AIRPORT,
+          ...pin,
           details: {
-            source: "serpapi_google_flights",
+            source: source === "serpapi" ? "serpapi_google_flights" : "fixture_google_flights",
             price: f.price,
             flight_numbers: f.flights.map((leg) => leg.flight_number),
             departure_time: first.departure_airport.time,
@@ -87,6 +110,8 @@ export const searchFlights = defineTool<Args>({
             stops,
             outbound_date: args.outbound_date,
             return_date: args.return_date,
+            departure_token: f.departure_token,
+            booking_token: f.booking_token,
           },
         };
       }),

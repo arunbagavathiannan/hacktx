@@ -1,4 +1,4 @@
-import type { ChatModel } from "../_shared/muse.ts";
+import { type ChatModel, parseJsonReply } from "../_shared/muse.ts";
 import type { ChatMessage, StoredOption, Trip } from "../_shared/tools/types.ts";
 
 // The verifier checks the plan before anyone sees it (see "Agent design" in CLAUDE.md).
@@ -100,9 +100,8 @@ export async function verify(
         { role: "system", content: SYSTEM },
         { role: "user", content: JSON.stringify(snapshot) },
       ],
-      json: true,
     });
-    const parsed = JSON.parse(reply.content ?? "{}");
+    const parsed = parseJsonReply(reply.content) ?? {};
     for (const issue of Array.isArray(parsed.issues) ? parsed.issues : []) {
       if (typeof issue === "string" && !issues.includes(issue)) issues.push(issue);
     }

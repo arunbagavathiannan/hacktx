@@ -11,7 +11,7 @@ import { scriptedMuse } from "../_shared/mocks/muse-script.ts";
 import { museSpark } from "../_shared/muse.ts";
 import { runTool } from "../_shared/tools/index.ts";
 import { supabaseStore } from "../_shared/tools/store.ts";
-import type { ChatMessage, ToolContext } from "../_shared/tools/types.ts";
+import type { ChatMessage, StoredOption, ToolContext } from "../_shared/tools/types.ts";
 import { runAgent } from "./loop.ts";
 import { supabaseSteps } from "./steps.ts";
 
@@ -31,6 +31,22 @@ const cors = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
+
+// What the Book button books: the group's winners, plus the cheapest pinned flight and hotel
+// when nobody voted on those (flights usually aren't polled).
+function defaultBookingRefs(options: StoredOption[]) {
+  const refs = options.filter((o) => o.isSelected).map((o) => o.ref);
+  for (const category of ["flight", "hotel"] as const) {
+    const pinned = options.filter((o) => o.category === category);
+    if (pinned.length && !pinned.some((o) => o.isSelected)) {
+      const cheapest = pinned.reduce((a, b) =>
+        (b.priceCents ?? Infinity) < (a.priceCents ?? Infinity) ? b : a,
+      );
+      refs.push(cheapest.ref);
+    }
+  }
+  return refs;
+}
 
 const reply = (body: unknown, status = 200) => Response.json(body, { status, headers: cors });
 
@@ -79,9 +95,7 @@ Deno.serve(async (req) => {
   if (body.action === "book") {
     // Only reached when the user taps Book: that tap is the confirmation the guardrail needs.
     const options = await store.listOptions(planId);
-    const refs = body.refs?.length
-      ? body.refs
-      : options.filter((o) => o.isSelected).map((o) => o.ref);
+    const refs = body.refs?.length ? body.refs : defaultBookingRefs(options);
     const index = await steps.start("book", "Preparing the booking");
     const result = await runTool("book", JSON.stringify({ refs }), {
       ...ctx,

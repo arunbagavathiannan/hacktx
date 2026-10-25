@@ -1,4 +1,4 @@
-// deno test supabase/functions/detect/
+// deno test --allow-env supabase/functions/detect/
 
 import { assert, assertEquals } from "jsr:@std/assert@1";
 import { demoChat } from "../_shared/mocks/demo-trip.ts";
