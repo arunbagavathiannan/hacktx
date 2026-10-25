@@ -1,4 +1,4 @@
-import { CheckCircle, Sparkle, WarningCircle } from "phosphor-react-native";
+import { Check, WarningCircle } from "phosphor-react-native";
 import { useEffect } from "react";
 import { Text, View } from "react-native";
 import Animated, {
@@ -22,6 +22,8 @@ import {
 } from "./useStepPlayback";
 
 // NativeWind className doesn't reach Reanimated views on web, so animated pieces use style.
+
+const TABULAR = { fontVariant: ["tabular-nums" as const] };
 
 // The running node's ring breathes (opacity only, no scaling) while the tool call runs.
 function PulseRing() {
@@ -77,20 +79,17 @@ function Results({ results }: { results: AgentStepResult[] }) {
   return (
     <View className="mt-2 border-t border-line">
       {results.map((r) => (
-        <View key={r.label} className="flex-row items-baseline gap-2 border-b border-line py-1.5">
-          <Text className="font-body-semibold text-sm text-ink">{r.label}</Text>
+        <View key={r.label} className="flex-row items-baseline gap-2 border-b border-line py-2">
+          <Text className="font-body-semibold text-small text-ink">{r.label}</Text>
           {r.note ? (
-            <Text numberOfLines={1} className="flex-1 font-body text-sm text-muted">
+            <Text numberOfLines={1} className="flex-1 font-body text-small text-muted">
               {r.note}
             </Text>
           ) : (
             <View className="flex-1" />
           )}
           {r.value ? (
-            <Text
-              className="font-body-bold text-sm text-ink"
-              style={{ fontVariant: ["tabular-nums"] }}
-            >
+            <Text className="font-body-bold text-small text-ink" style={TABULAR}>
               {r.value}
             </Text>
           ) : null}
@@ -101,12 +100,14 @@ function Results({ results }: { results: AgentStepResult[] }) {
 }
 
 // One tool call in the "Huddle is working" timeline. Every step connects down to the next
-// one, and the last one to the closing "Plan ready" row.
+// one, and the last one to the closing "Plan ready" row. Only the running step is in accent:
+// a finished step drops to a small outlined node with a muted icon, so the eye lands on what
+// is happening now. The connector carries the progress color.
 export function StepRow({ step, status }: Props) {
   const Icon = toolIcons[step.tool];
   const running = status === "running";
   const failed = status === "failed";
-  const tint = failed ? colors.gold : colors.accent;
+  const iconColor = running ? colors.accent : failed ? colors.gold : colors.muted;
 
   return (
     <Animated.View entering={fadeIn()}>
@@ -120,27 +121,32 @@ export function StepRow({ step, status }: Props) {
             {running ? <PulseRing /> : null}
             <View
               className={cn(
-                "h-11 w-11 items-center justify-center rounded-full border",
-                running ? "border-accent bg-surface" : "border-accent-soft bg-accent-soft",
+                "items-center justify-center rounded-full border",
+                running ? "h-11 w-11 border-accent bg-surface" : "h-8 w-8 bg-bg",
+                !running && (failed ? "border-gold" : "border-line"),
               )}
             >
-              <Icon size={20} color={tint} weight={running ? "fill" : "regular"} />
+              <Icon
+                size={running ? 20 : 16}
+                color={iconColor}
+                weight={running ? "fill" : "regular"}
+              />
             </View>
           </View>
-          <Connector filled={!running} color={tint} />
+          <Connector filled={!running} color={failed ? colors.gold : colors.accent} />
         </View>
 
-        <View className="flex-1 gap-1 pb-5 pt-1">
+        <View className="flex-1 gap-1 pb-6 pt-2.5">
           <View className="flex-row items-center gap-2">
-            <Text className="flex-1 font-body-semibold text-base text-ink">{step.label}</Text>
+            <Text className="flex-1 font-body-semibold text-body text-ink">{step.label}</Text>
             {running ? (
-              <Text className="font-body-semibold text-xs text-accent">Working</Text>
+              <Text className="font-body-semibold text-caption text-accent">Working</Text>
             ) : (
               <Animated.View entering={fadeIn()}>
                 {failed ? (
-                  <WarningCircle size={20} color={colors.gold} weight="fill" />
+                  <WarningCircle size={18} color={colors.gold} />
                 ) : (
-                  <CheckCircle size={20} color={colors.good} weight="fill" />
+                  <Check size={16} color={colors.good} weight="bold" />
                 )}
               </Animated.View>
             )}
@@ -150,7 +156,8 @@ export function StepRow({ step, status }: Props) {
           ) : (
             <Animated.View entering={fadeIn()}>
               <Text
-                className={cn("font-body text-sm leading-5", failed ? "text-gold" : "text-muted")}
+                className={cn("font-body text-small", failed ? "text-gold" : "text-muted")}
+                style={TABULAR}
               >
                 {failed ? (step.fallback ?? "Skipped. Huddle kept going without it.") : step.detail}
               </Text>
@@ -163,7 +170,8 @@ export function StepRow({ step, status }: Props) {
   );
 }
 
-// Closing row: the last connector lands on a green node, then "Plan ready". It fades in; no pop.
+// Closing row: the last connector lands on an accent node with a check, then "Plan ready".
+// The payoff stays sunset-colored; green is only the small per-step checks. Fades in, no pop.
 export function ReadyRow({
   summary,
   animate,
@@ -176,12 +184,14 @@ export function ReadyRow({
   return (
     <Animated.View entering={animate ? fadeIn() : undefined}>
       <View accessible accessibilityLabel={`${title}. ${summary}`} className="flex-row gap-4">
-        <View className="h-11 w-11 items-center justify-center rounded-full bg-good">
-          <Sparkle size={20} color={colors.bg} weight="fill" />
+        <View className="h-11 w-11 items-center justify-center rounded-full bg-accent">
+          <Check size={22} color={colors.bg} weight="bold" />
         </View>
-        <View className="flex-1 gap-1 pt-1">
-          <Text className="font-display text-lg leading-6 text-ink">{title}</Text>
-          <Text className="font-body text-sm leading-5 text-muted">{summary}</Text>
+        <View className="flex-1 gap-1 pt-2.5">
+          <Text className="font-display text-headline text-accent" style={TABULAR}>
+            {title}
+          </Text>
+          <Text className="font-body text-small text-muted">{summary}</Text>
         </View>
       </View>
     </Animated.View>

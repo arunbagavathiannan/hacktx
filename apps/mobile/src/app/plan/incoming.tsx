@@ -1,6 +1,6 @@
 import * as Haptics from "expo-haptics";
 import { router, useLocalSearchParams } from "expo-router";
-import { CaretLeft, PaperPlaneTilt, Plus, Sparkle } from "phosphor-react-native";
+import { CaretLeft, PaperPlaneTilt, Plus } from "phosphor-react-native";
 import { useEffect, useRef, useState } from "react";
 import {
   AccessibilityInfo,
@@ -15,7 +15,7 @@ import Animated, { useReducedMotion } from "react-native-reanimated";
 import { ChatBubble } from "@/components/incoming/ChatBubble";
 import { PlanBanner } from "@/components/incoming/PlanBanner";
 import { TypingIndicator } from "@/components/incoming/TypingIndicator";
-import { AvatarStack, Screen } from "@/components/ui";
+import { AvatarStack, Caption, Heading, Screen } from "@/components/ui";
 import { brief, chat, members, triggerMessageId } from "@/mocks";
 import type { Member } from "@/mocks/types";
 import { colors } from "@/theme";
@@ -125,10 +125,10 @@ export default function Incoming() {
           </Pressable>
           <AvatarStack members={friends} size="sm" max={3} />
           <View className="flex-1">
-            <Text className="font-display text-lg leading-6 text-ink">{brief.sourceChat.name}</Text>
-            <Text className="font-body text-xs text-muted" numberOfLines={1}>
+            <Heading>{brief.sourceChat.name}</Heading>
+            <Caption className="text-muted" numberOfLines={1}>
               {friends.map((m) => m.name).join(", ")}, you
-            </Text>
+            </Caption>
           </View>
         </View>
 
@@ -138,11 +138,7 @@ export default function Incoming() {
           contentContainerClassName="grow justify-end gap-4 px-4 py-5"
           onContentSizeChange={() => scroll.current?.scrollToEnd({ animated: true })}
         >
-          <View className="items-center pb-2">
-            <Text className="rounded-full bg-surface px-3 py-1 font-body-semibold text-[11px] text-faint">
-              Today
-            </Text>
-          </View>
+          <Caption className="pb-2 text-center">Today</Caption>
 
           {chat.slice(0, shown).map((m) => (
             <ChatBubble key={m.id} message={m} sender={memberFor(m.from)} />
@@ -156,11 +152,10 @@ export default function Incoming() {
                 accessibilityRole="button"
                 accessibilityLabel="Huddle spotted a plan. Review it."
                 onPress={() => setBanner("open")}
-                className="min-h-12 flex-row items-center gap-2 rounded-full bg-accent-soft px-5 active:opacity-80"
+                className="min-h-12 flex-row items-center rounded-full border border-line bg-surface px-5 active:bg-raised"
               >
-                <Sparkle size={16} color={colors.accent} weight="fill" />
-                <Text className="font-body-bold text-sm text-accent">
-                  Huddle spotted a plan · Review
+                <Text className="font-body-semibold text-label text-ink">
+                  Huddle spotted a plan · <Text className="text-accent">Review</Text>
                 </Text>
               </Pressable>
             </Animated.View>

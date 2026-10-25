@@ -1,15 +1,15 @@
-import { ChatsCircle, Sparkle } from "phosphor-react-native";
+import { ChatsCircle } from "phosphor-react-native";
 import { Text, View } from "react-native";
 import Animated, { SlideInUp, SlideOutUp } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { AvatarStack, Button } from "@/components/ui";
+import { AvatarStack, Button, Caption, Heading, Muted } from "@/components/ui";
 import type { Member } from "@/mocks/types";
 import { colors } from "@/theme";
 import { DURATION, EASE_OUT } from "@/theme/motion";
 
 type Props = {
   title: string; // "Planning Denver with Sam?"
-  body: string; // "Huddle spotted a trip in ski bums"
+  body: string; // the chat message that triggered it, quoted
   members: Member[];
   onPlan: () => void;
   onDismiss: () => void;
@@ -45,14 +45,14 @@ export function PlanBanner({ title, body, members, onPlan, onDismiss }: Props) {
             <View className="h-6 w-6 items-center justify-center rounded-lg bg-accent">
               <ChatsCircle size={16} color={colors.bg} weight="fill" />
             </View>
-            <Text className="font-body-bold text-xs text-muted">Huddle</Text>
-            <Text className="flex-1 font-body text-xs text-faint">· now</Text>
+            <Text className="font-body-semibold text-caption text-muted">Huddle</Text>
+            <Caption className="flex-1">· now</Caption>
             <AvatarStack members={members} size="sm" max={3} />
           </View>
 
           <View className="gap-0.5">
-            <Text className="font-display text-lg leading-6 text-ink">{title}</Text>
-            <Text className="font-body text-sm leading-5 text-muted">{body}</Text>
+            <Heading>{title}</Heading>
+            <Muted>{body}</Muted>
           </View>
 
           <View className="flex-row gap-2 pt-1">
@@ -62,12 +62,7 @@ export function PlanBanner({ title, body, members, onPlan, onDismiss }: Props) {
               onPress={onDismiss}
               className="h-12 flex-1 px-4"
             />
-            <Button
-              label="Plan it"
-              onPress={onPlan}
-              icon={<Sparkle size={18} color={colors.bg} weight="fill" />}
-              className="h-12 flex-1 px-4"
-            />
+            <Button label="Plan it" onPress={onPlan} className="h-12 flex-1 px-4" />
           </View>
         </View>
       </View>
