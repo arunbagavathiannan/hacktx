@@ -1,9 +1,8 @@
 import { Redirect, router, useLocalSearchParams } from "expo-router";
-import { Info, MapTrifold, PaperPlaneTilt, SealCheck } from "phosphor-react-native";
+import { Info, MapTrifold, PaperPlaneTilt } from "phosphor-react-native";
 import { type ComponentRef, useMemo, useRef, useState } from "react";
-import { Text, useWindowDimensions, View } from "react-native";
-import Animated from "react-native-reanimated";
-import { BudgetCard, DayCard, StayCard } from "@/components/booked/DayPlan";
+import { useWindowDimensions, View } from "react-native";
+import { BudgetLine, DaySection, StaySection } from "@/components/booked/DayPlan";
 import { buildItinerary, summaryText } from "@/components/booked/itinerary";
 import { Reveal } from "@/components/booked/Reveal";
 import { FRAME_HEIGHT, FRAME_WIDTH, ShareCard } from "@/components/booked/ShareCard";
@@ -15,11 +14,11 @@ import {
   textActionLabel,
 } from "@/components/booked/share";
 import { gasPerPerson, planLegs } from "@/components/route/legs";
-import { AvatarStack, Body, Button, Label, Muted, Screen, Title } from "@/components/ui";
+import { Body, Button, Caption, Display, Muted, Screen, Title } from "@/components/ui";
 import type { Trip } from "@/mocks/types";
 import { isDriving, useDestination, usePlan } from "@/store/plan";
 import { colors } from "@/theme";
-import { fadeIn, stagger } from "@/theme/motion";
+import { stagger } from "@/theme/motion";
 
 // Only say "Sent" when the platform confirms it (web share). Android's share sheet can't tell
 // us whether anything was sent, so it gets a neutral line.
@@ -94,88 +93,78 @@ function Booked() {
   return (
     <Screen
       scroll
+      className="gap-8"
       footer={<Button label="Done" variant="secondary" onPress={() => router.replace("/")} />}
     >
-      <View className="items-center gap-4 pt-6">
-        <View className="h-24 w-24 items-center justify-center">
-          <Animated.View entering={fadeIn()}>
-            <View className="h-20 w-20 items-center justify-center rounded-full border border-accent/40 bg-accent-soft">
-              <SealCheck size={44} color={colors.accent} weight="fill" />
-            </View>
-          </Animated.View>
-        </View>
-        <Reveal delay={stagger(1)} className="items-center gap-2">
-          <Label>Booked</Label>
-          <Title className="text-center text-4xl leading-[44px]">
-            You're going to {trip.destination.city}
-          </Title>
-          <Muted className="text-center">
+      {/* The share card is the confirmation: the ticket the group gets. Fading in, top to
+          bottom, is this screen's one motion (DESIGN.md "Motion"). */}
+      <View className="gap-5 pt-4">
+        <Reveal delay={0} className="gap-1">
+          <Display accessibilityRole="header">You're going to {trip.destination.city}</Display>
+          <Muted numeric>
             {trip.dates.label} · {trip.members.length} of you
           </Muted>
-          {/* MOCK: booking is simulated (CLAUDE.md "Real vs. mocked"). Keep this easy to read. */}
-          <View className="mt-1 flex-row items-center gap-1.5 rounded-full border border-line bg-raised px-3 py-1.5">
-            <Info size={16} color={colors.muted} />
-            <Text className="font-body-semibold text-sm text-muted">
-              Demo booking: nothing was charged
-            </Text>
+        </Reveal>
+
+        <Reveal delay={stagger(1)}>
+          <View
+            accessible
+            accessibilityRole="image"
+            accessibilityLabel={`Share card preview. ${text}`}
+            className="self-center"
+            style={{ width: FRAME_WIDTH * scale, height: FRAME_HEIGHT * scale }}
+          >
+            <View style={{ transform: [{ scale }], transformOrigin: "top left" }}>
+              <ShareCard ref={card} trip={trip} itinerary={itinerary} />
+            </View>
           </View>
-          <View className="pt-1">
-            <AvatarStack members={trip.members} max={5} />
+        </Reveal>
+
+        <Reveal delay={stagger(2)} className="gap-3">
+          <Button
+            label={`Send to ${trip.sourceChat.name}`}
+            icon={<PaperPlaneTilt size={20} color={colors.bg} weight="fill" />}
+            loading={busy}
+            onPress={() => run(() => shareCard(card, text))}
+          />
+          <Button
+            label={textActionLabel}
+            variant="secondary"
+            icon={<TextIcon size={20} color={colors.ink} />}
+            disabled={busy}
+            onPress={() => run(() => shareText(text))}
+          />
+          <Muted
+            accessibilityLiveRegion="polite"
+            accessibilityRole="text"
+            className="min-h-5 text-center"
+          >
+            {status ?? ""}
+          </Muted>
+          {/* MOCK: booking is simulated (CLAUDE.md "Real vs. mocked"). Said plainly, as a
+              footnote. */}
+          <View className="flex-row items-center justify-center gap-1.5">
+            <Info size={16} color={colors.faint} />
+            <Caption>Demo booking: nothing was charged</Caption>
           </View>
         </Reveal>
       </View>
 
-      <Reveal delay={stagger(2)} className="gap-3">
-        <BudgetCard itinerary={itinerary} trip={trip} />
-      </Reveal>
-
-      <Reveal delay={stagger(3)} className="gap-3">
-        <Label>Your weekend</Label>
-        {itinerary.notes.map((note) => (
-          <View key={note} className="flex-row items-start gap-2">
-            <Info size={16} color={colors.gold} />
-            <Muted className="flex-1">{note}</Muted>
-          </View>
-        ))}
-        {itinerary.stays.length ? <StayCard stays={itinerary.stays} trip={trip} /> : null}
-        {itinerary.days.map((day) => (
-          <DayCard key={day.key} day={day} trip={trip} />
-        ))}
-      </Reveal>
-
-      <Reveal delay={stagger(4)} className="gap-3">
-        <Label>Send it to {trip.sourceChat.name}</Label>
-        <View
-          accessible
-          accessibilityRole="image"
-          accessibilityLabel={`Share card preview. ${text}`}
-          className="self-center"
-          style={{ width: FRAME_WIDTH * scale, height: FRAME_HEIGHT * scale }}
-        >
-          <View style={{ transform: [{ scale }], transformOrigin: "top left" }}>
-            <ShareCard ref={card} trip={trip} itinerary={itinerary} />
-          </View>
+      <Reveal delay={stagger(3)} className="gap-6">
+        <View className="gap-1">
+          <Title accessibilityRole="header">Your weekend</Title>
+          <BudgetLine itinerary={itinerary} trip={trip} />
+          {itinerary.notes.map((note) => (
+            <View key={note} className="flex-row items-start gap-2 pt-1">
+              <Info size={16} color={colors.gold} />
+              <Muted className="flex-1">{note}</Muted>
+            </View>
+          ))}
         </View>
-        <Button
-          label={`Send to ${trip.sourceChat.name}`}
-          icon={<PaperPlaneTilt size={20} color={colors.bg} weight="fill" />}
-          loading={busy}
-          onPress={() => run(() => shareCard(card, text))}
-        />
-        <Button
-          label={textActionLabel}
-          variant="secondary"
-          icon={<TextIcon size={20} color={colors.ink} />}
-          disabled={busy}
-          onPress={() => run(() => shareText(text))}
-        />
-        <Muted
-          accessibilityLiveRegion="polite"
-          accessibilityRole="text"
-          className="min-h-5 text-center"
-        >
-          {status ?? ""}
-        </Muted>
+        {itinerary.stays.length ? <StaySection stays={itinerary.stays} trip={trip} /> : null}
+        {itinerary.days.map((day) => (
+          <DaySection key={day.key} day={day} trip={trip} />
+        ))}
       </Reveal>
     </Screen>
   );
@@ -183,18 +172,17 @@ function Booked() {
 
 function Empty() {
   return (
-    <Screen className="items-center justify-center gap-4 pb-10">
-      <View className="h-20 w-20 items-center justify-center rounded-full bg-raised">
-        <MapTrifold size={36} color={colors.accent} />
-      </View>
-      <Title className="text-center">Nothing in the plan yet</Title>
+    <Screen className="items-center justify-center gap-3 pb-10">
+      <Title accessibilityRole="header" className="text-center">
+        Nothing in the plan yet
+      </Title>
       <Body className="text-center text-muted">
         Pick a flight, a place to stay, and a few things to do on the map, and Huddle builds the
         plan.
       </Body>
       <Button
         label="Back to the map"
-        className="self-stretch"
+        className="mt-3 self-stretch"
         icon={<MapTrifold size={20} color={colors.bg} />}
         onPress={() => router.replace("/plan/map")}
       />
