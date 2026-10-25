@@ -75,7 +75,8 @@ export default function Working() {
         </View>
 
         <View className="gap-1">
-          <Title>{trip.title}</Title>
+          {/* No city yet: the group picks one on the summary screen. */}
+          <Title>Planning the {trip.sourceChat.name} trip</Title>
           <Muted>
             {trip.dates.label} · from {trip.sourceChat.name}
           </Muted>

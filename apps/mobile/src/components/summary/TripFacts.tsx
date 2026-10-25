@@ -34,15 +34,28 @@ function Row({
 }
 
 // Who / where / when / budget, the four things the agent pulled out of the chat.
-export function TripFacts({ trip }: { trip: Trip }) {
+// `destination` is null until the group picks one of the suggested cities.
+export function TripFacts({
+  trip,
+  destination,
+  ideas,
+}: {
+  trip: Trip;
+  destination: { city: string; region: string } | null;
+  ideas: number;
+}) {
   const names = trip.members.map((m) => m.name).join(", ");
   return (
     <Card className="py-1">
       <Row
         first
         icon={MapPin}
-        title={`${trip.destination.city}, ${trip.destination.region}`}
-        detail={`From ${trip.origin.city} (${trip.origin.airport})`}
+        title={destination ? `${destination.city}, ${destination.region}` : "Where: pick below"}
+        detail={
+          destination
+            ? `From ${trip.origin.city} (${trip.origin.airport})`
+            : `${ideas} ideas from the chat · from ${trip.origin.city} (${trip.origin.airport})`
+        }
       />
       <Row icon={CalendarBlank} title={trip.dates.label} />
       <Row icon={Wallet} title={`$${trip.budgetPerPerson} per person`} detail="Flights + hotel" />

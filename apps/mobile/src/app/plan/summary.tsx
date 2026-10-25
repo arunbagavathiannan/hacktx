@@ -5,6 +5,7 @@ import { View } from "react-native";
 import Animated, { FadeInDown } from "react-native-reanimated";
 import { prefetchMapTiles } from "@/components/map/MapCanvas";
 import { ClarificationCard } from "@/components/summary/ClarificationCard";
+import { DestinationPicker } from "@/components/summary/DestinationPicker";
 import {
   demoPrefs,
   inferAnswer,
@@ -15,6 +16,7 @@ import {
 import { TripFacts } from "@/components/summary/TripFacts";
 import { Badge, Body, Button, Label, Muted, Screen, Title } from "@/components/ui";
 import { clarifications, flights, trip } from "@/mocks";
+import { destinationSuggestions } from "@/mocks/destinations";
 import type { Preferences } from "@/mocks/types";
 import { usePlan } from "@/store/plan";
 import { usePreferences } from "@/store/preferences";
@@ -100,23 +102,33 @@ export default function Summary() {
     answer(id, option);
   };
 
+  // The group picks the city here, after the facts and questions; the map opens for it.
+  const storeDestinationId = usePlan((s) => s.destinationId);
+  const chooseDestination = usePlan((s) => s.chooseDestination);
+  const [demoDestinationId, setDemoDestinationId] = useState<string | null>(null);
+  const destinationId = isDemo ? demoDestinationId : storeDestinationId;
+  const destination = destinationSuggestions.find((d) => d.id === destinationId) ?? null;
+  const onChoose = isDemo ? setDemoDestinationId : chooseDestination;
+
   const remaining = clarifications.filter((c) => !shown(c.id)).length;
   const lines = preferenceLines(prefs);
+  const blocker =
+    remaining > 0
+      ? `Answer ${remaining} quick question${remaining === 1 ? "" : "s"} to open the map`
+      : destination
+        ? null
+        : "Pick where to go to open the map";
 
   return (
     <Screen
       scroll
       footer={
         <View className="gap-2">
-          {remaining > 0 ? (
-            <Muted className="text-center">
-              Answer {remaining} quick question{remaining === 1 ? "" : "s"} to open the map
-            </Muted>
-          ) : null}
+          {blocker ? <Muted className="text-center">{blocker}</Muted> : null}
           <Button
-            label="Open the map"
+            label={destination ? `Open the map for ${destination.city}` : "Open the map"}
             icon={<MapTrifold size={20} color={colors.bg} weight={icon.activeWeight} />}
-            disabled={remaining > 0}
+            disabled={blocker !== null}
             onPress={() => router.push("/plan/map")}
           />
         </View>
@@ -128,7 +140,9 @@ export default function Summary() {
             label={`From ${trip.sourceChat.name} on ${appName[trip.sourceChat.app]}`}
             tone="accent"
           />
-          <Title className="text-4xl leading-[44px]">{trip.title}</Title>
+          <Title className="text-4xl leading-[44px]">
+            {destination ? `${destination.city} weekend` : "Weekend trip"}
+          </Title>
           <View className="flex-row items-center gap-2">
             <Sparkle size={18} color={colors.gold} weight={icon.activeWeight} />
             <Body className="flex-1 text-muted">{trip.why}</Body>
@@ -137,7 +151,7 @@ export default function Summary() {
       </Animated.View>
 
       <Animated.View entering={enter(1)}>
-        <TripFacts trip={trip} />
+        <TripFacts trip={trip} destination={destination} ideas={destinationSuggestions.length} />
       </Animated.View>
 
       {lines.length > 0 ? (
@@ -172,6 +186,21 @@ export default function Summary() {
           </View>
         </Animated.View>
       ) : null}
+
+      <Animated.View entering={enter(4)}>
+        <View className="gap-3">
+          <Label>Where to?</Label>
+          <Muted>
+            Huddle found {destinationSuggestions.length} ideas in the chat. Pick one and the map
+            opens for it.
+          </Muted>
+          <DestinationPicker
+            suggestions={destinationSuggestions}
+            selectedId={destinationId}
+            onSelect={onChoose}
+          />
+        </View>
+      </Animated.View>
     </Screen>
   );
 }
