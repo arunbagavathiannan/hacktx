@@ -1,10 +1,10 @@
-// deno test supabase/functions/detect/
+// deno test --allow-env supabase/functions/detect/
 
 import { assert, assertEquals } from "jsr:@std/assert@1";
 import { demoChat } from "../_shared/mocks/demo-trip.ts";
 import type { ChatModel } from "../_shared/muse.ts";
 import type { ChatMessage } from "../_shared/tools/types.ts";
-import { detect, keywordDetect } from "./detector.ts";
+import { clearDetectCache, detect, keywordDetect } from "./detector.ts";
 
 const msg = (sender: string, text: string): ChatMessage => ({
   sender,
@@ -49,6 +49,7 @@ const modelReplying = (content: string): ChatModel => ({
 });
 
 Deno.test("uses Muse Spark's answer when it's well formed", async () => {
+  clearDetectCache();
   const d = await detect(
     demoChat,
     modelReplying('{"isPlan":true,"confidence":0.97,"summary":"Denver with Sam"}'),
@@ -57,6 +58,7 @@ Deno.test("uses Muse Spark's answer when it's well formed", async () => {
 });
 
 Deno.test("falls back to keywords when the model fails or rambles", async () => {
+  clearDetectCache();
   const broken: ChatModel = {
     name: "down",
     complete: () => Promise.reject(new Error("503")),
@@ -66,4 +68,41 @@ Deno.test("falls back to keywords when the model fails or rambles", async () => 
     assertEquals(d.source, "keywords");
     assert(d.isPlan);
   }
+});
+
+Deno.test("small talk never reaches Muse Spark", async () => {
+  clearDetectCache();
+  let calls = 0;
+  const spy: ChatModel = {
+    name: "spy",
+    complete: async () => {
+      calls++;
+      return { role: "assistant", content: '{"isPlan":false,"confidence":1,"summary":""}' };
+    },
+  };
+  const d = await detect([msg("Sam", "lol did you see that"), msg("Arun", "💀")], spy);
+  assertEquals(calls, 0);
+  assertEquals(d.isPlan, false);
+});
+
+Deno.test("the same batch twice costs one Muse Spark call", async () => {
+  clearDetectCache();
+  let calls = 0;
+  const spy: ChatModel = {
+    name: "spy",
+    complete: async () => {
+      calls++;
+      return {
+        role: "assistant",
+        content: '{"isPlan":true,"confidence":0.9,"summary":"Denver trip with Sam"}',
+      };
+    },
+  };
+  const first = await detect(demoChat, spy, "Sidd");
+  const second = await detect(demoChat, spy, "Sidd");
+  assertEquals(calls, 1);
+  assertEquals(second, first);
+  // A new message is a new batch.
+  await detect([...demoChat, msg("Villy", "booking flights tonight")], spy, "Sidd");
+  assertEquals(calls, 2);
 });

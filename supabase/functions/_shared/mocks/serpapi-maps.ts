@@ -1,33 +1,30 @@
-// MOCK: Google Places API (New) Text Search results (places:searchText) for Denver. Real places
-// and coordinates; ids are mock ids. Same field names as the real API.
-
-const mapsUri = (name: string) =>
-  `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(`${name} Denver`)}`;
+// MOCK: SerpAPI Google Maps search results (engine=google_maps, type=search) for Denver.
+// Real places and coordinates; place ids are mock ids. Same field names as the real API.
 
 const place = (
   id: string,
-  name: string,
+  title: string,
   type: string,
-  formattedAddress: string,
+  address: string,
   latitude: number,
   longitude: number,
   rating: number,
-  userRatingCount: number,
-  priceLevel?: string,
+  reviews: number,
+  price?: string,
 ) => ({
-  id: `mock_${id}`,
-  displayName: { text: name, languageCode: "en" },
-  primaryTypeDisplayName: { text: type, languageCode: "en" },
-  formattedAddress,
-  location: { latitude, longitude },
+  position: 0,
+  title,
+  place_id: `mock_${id}`,
+  gps_coordinates: { latitude, longitude },
   rating,
-  userRatingCount,
-  priceLevel,
-  googleMapsUri: mapsUri(name),
+  reviews,
+  price,
+  type,
+  address,
 });
 
-export const placesDenverRestaurants = {
-  places: [
+export const mapsDenverRestaurants = {
+  local_results: [
     place(
       "hop_alley",
       "Hop Alley",
@@ -37,7 +34,7 @@ export const placesDenverRestaurants = {
       -104.9727,
       4.6,
       1904,
-      "PRICE_LEVEL_EXPENSIVE",
+      "$$$",
     ),
     place(
       "work_and_class",
@@ -48,7 +45,7 @@ export const placesDenverRestaurants = {
       -104.9858,
       4.6,
       2671,
-      "PRICE_LEVEL_MODERATE",
+      "$$",
     ),
     place(
       "denver_central_market",
@@ -59,7 +56,7 @@ export const placesDenverRestaurants = {
       -104.9842,
       4.6,
       5310,
-      "PRICE_LEVEL_MODERATE",
+      "$$",
     ),
     place(
       "tavernetta",
@@ -70,7 +67,7 @@ export const placesDenverRestaurants = {
       -105.0003,
       4.7,
       2215,
-      "PRICE_LEVEL_EXPENSIVE",
+      "$$$",
     ),
     place(
       "snooze_union_station",
@@ -81,13 +78,13 @@ export const placesDenverRestaurants = {
       -104.9998,
       4.5,
       3488,
-      "PRICE_LEVEL_MODERATE",
+      "$$",
     ),
   ],
 };
 
-export const placesDenverActivities = {
-  places: [
+export const mapsDenverActivities = {
+  local_results: [
     place(
       "red_rocks",
       "Red Rocks Park and Amphitheatre",
@@ -141,4 +138,22 @@ export const placesDenverActivities = {
   ],
 };
 
-export type GooglePlace = (typeof placesDenverRestaurants)["places"][number];
+// Fields the tool reads. Live results have many more, and some may be missing.
+export interface MapsPlace {
+  title: string;
+  place_id?: string;
+  gps_coordinates?: { latitude: number; longitude: number };
+  rating?: number;
+  reviews?: number;
+  price?: string;
+  type?: string;
+  address?: string;
+  thumbnail?: string;
+}
+
+export interface MapsResponse {
+  local_results?: MapsPlace[];
+  // When the query names one specific place ("Red Rocks"), Google Maps answers with that
+  // place alone instead of a list.
+  place_results?: MapsPlace;
+}

@@ -1,6 +1,9 @@
 // Shared types for the planner agent's tools. Tool definitions use the OpenAI function-calling
 // shape, which Muse Spark accepts (see "Agent design" in CLAUDE.md).
 
+import type { ChatModel } from "../muse.ts";
+import type { Preferences } from "../preferences.ts";
+
 export type Category = "flight" | "hotel" | "restaurant" | "activity";
 
 export type PlanStatus = "planning" | "needs_input" | "voting" | "ready" | "booked" | "failed";
@@ -18,11 +21,27 @@ export interface Place {
   lng?: number;
 }
 
+// A real way to book one option, from SerpAPI (Google Flights booking options or Google
+// Hotels property prices). Huddle links out; it never takes payment.
+export interface BookingOffer {
+  ref: string;
+  seller: string;
+  // Per person for flights, the whole stay for one room for hotels.
+  priceCents: number;
+  url?: string;
+  phone?: string;
+  official?: boolean;
+  // Google Flights hands off with a POST (open it as a form submit).
+  bookingRequest?: { url: string; post_data: string };
+}
+
 export interface Booking {
   confirmationCode: string;
   refs: string[];
   totalCents: number;
   createdAt: string;
+  // Cheapest live offer first, per option. Empty without SerpAPI.
+  offers: BookingOffer[];
 }
 
 // extract_trip output, stored in plans.trip.
@@ -88,6 +107,8 @@ export interface PlanStore {
   listVotes(planId: string): Promise<Vote[]>;
   // Marks one option as the winner of its category and clears the others.
   selectOption(planId: string, category: Category, optionId: string): Promise<void>;
+  // Removes every option (and, with them, their votes) so a re-run starts clean.
+  clearOptions(planId: string): Promise<void>;
 }
 
 export interface ToolContext {
@@ -101,6 +122,13 @@ export interface ToolContext {
   found: Map<string, Option>;
   // True only when the user tapped "Book" in the app. book refuses otherwise.
   bookingConfirmed: boolean;
+  // Muse Spark, when its key is set. extract_trip reads the chat with it; without it,
+  // extract_trip falls back to the demo trip.
+  model?: ChatModel;
+  // Where the group starts from when the chat doesn't say (flights need an origin).
+  home?: Place;
+  // The phone owner's onboarding answers. Searches default to them; the verifier checks them.
+  preferences?: Preferences;
 }
 
 export interface ToolResult {
@@ -125,6 +153,8 @@ export interface Tool<A = ToolArgs> {
   parameters: JsonSchema;
   // One line for agent_steps.input_summary ("Searching flights AUS → DEN").
   describe(args: A): string;
+  // Overrides runTool's default 8 s limit (book makes several SerpAPI calls).
+  timeoutMs?: number;
   run(args: A, ctx: ToolContext): Promise<ToolResult>;
 }
 

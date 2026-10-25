@@ -2,6 +2,7 @@ import {
   AirplaneTilt,
   Bed,
   ChatText,
+  CheckSquare,
   ForkKnife,
   GlobeHemisphereWest,
   type Icon,
@@ -9,6 +10,8 @@ import {
   Question,
   ShieldCheck,
   SlidersHorizontal,
+  Ticket,
+  UsersThree,
 } from "phosphor-react-native";
 import type { AgentStep } from "@/mocks/types";
 
@@ -21,6 +24,9 @@ export const toolIcons: Record<AgentStep["tool"], Icon> = {
   search_hotels: Bed,
   search_places: ForkKnife,
   pin_on_map: MapPin,
+  create_poll: UsersThree,
+  tally_votes: CheckSquare,
   verify: ShieldCheck,
   ask_user: Question,
+  book: Ticket,
 };

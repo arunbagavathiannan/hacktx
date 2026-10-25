@@ -1,4 +1,4 @@
-import type { ChatModel } from "../_shared/muse.ts";
+import { type ChatModel, parseJsonReply } from "../_shared/muse.ts";
 import type { ChatMessage } from "../_shared/tools/types.ts";
 
 // Detector: decides whether a batch of chat messages is turning into a plan.
@@ -91,14 +91,52 @@ starting to plan a trip or outing together (not just mentioning a place). Reply 
 {"isPlan": boolean, "confidence": number 0-1, "summary": "<Where> trip with <names>"}
 Keep summary under 50 characters.`;
 
+type DetectResult = Detection & { source: "muse" | "keywords"; modelError?: string };
+
+// Below this keyword score there's nothing trip-like (no place, travel word, date or budget),
+// so Muse Spark isn't called at all.
+export const MODEL_MIN_SCORE = 0.3;
+
+// The app may send the same batch again (new notification, same chat). Reuse the answer for
+// 10 minutes instead of paying for another model call.
+const CACHE_MS = 10 * 60_000;
+const recent = new Map<string, { at: number; result: DetectResult }>();
+
+export function clearDetectCache() {
+  recent.clear();
+}
+
 export async function detect(
   messages: ChatMessage[],
   model: ChatModel | null,
   userName?: string,
-): Promise<Detection & { source: "muse" | "keywords" }> {
+): Promise<DetectResult> {
   if (messages.length === 0) {
     return { isPlan: false, confidence: 0, summary: "", source: "keywords" };
   }
+  const keywords = keywordDetect(messages, userName);
+  if (keywords.confidence < MODEL_MIN_SCORE) {
+    return { ...keywords, source: "keywords", modelError: "skipped: nothing trip-like" };
+  }
+
+  const key = JSON.stringify([userName ?? "", messages.map((m) => [m.sender, m.text])]);
+  const hit = recent.get(key);
+  if (hit && Date.now() - hit.at < CACHE_MS) return hit.result;
+
+  const result = await askModel(messages, model, userName);
+  if (result.source === "muse") {
+    if (recent.size >= 200) recent.delete(recent.keys().next().value as string);
+    recent.set(key, { at: Date.now(), result });
+  }
+  return result;
+}
+
+async function askModel(
+  messages: ChatMessage[],
+  model: ChatModel | null,
+  userName?: string,
+): Promise<DetectResult> {
+  let modelError: string | undefined;
   if (model) {
     try {
       const reply = await model.complete({
@@ -109,20 +147,23 @@ export async function detect(
             content: messages.map((m) => `${m.sender}: ${m.text}`).join("\n"),
           },
         ],
-        json: true,
       });
-      const parsed = JSON.parse(reply.content ?? "");
-      if (typeof parsed.isPlan === "boolean" && typeof parsed.confidence === "number") {
+      const parsed = parseJsonReply(reply.content);
+      if (parsed && typeof parsed.isPlan === "boolean" && typeof parsed.confidence === "number") {
         return {
           isPlan: parsed.isPlan,
           confidence: Math.min(Math.max(parsed.confidence, 0), 1),
-          summary: String(parsed.summary ?? "").slice(0, 80),
+          summary: parsed.isPlan ? String(parsed.summary ?? "").slice(0, 80) : "",
           source: "muse",
         };
       }
+      modelError = `Reply wasn't the expected JSON: ${(reply.content ?? "").slice(0, 120)}`;
     } catch (err) {
+      modelError = err instanceof Error ? err.message : String(err);
       console.error("detector model call failed, using keywords", err);
     }
+  } else {
+    modelError = "MUSE_SPARK_API_KEY is not set";
   }
-  return { ...keywordDetect(messages, userName), source: "keywords" };
+  return { ...keywordDetect(messages, userName), source: "keywords", modelError };
 }

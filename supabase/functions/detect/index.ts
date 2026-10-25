@@ -2,7 +2,7 @@
 // this answers whether it looks like a plan, so the app can show the "Plan it?" heads-up.
 // No tools, no database writes. See "Agent design" in CLAUDE.md.
 //
-// POST { messages: [{ sender, text, sentAt }], user_name? } → 200 { isPlan, confidence, summary }
+// POST { messages: [{ sender, text, sentAt }], user_name? } → 200 { isPlan, confidence, summary, source }
 
 import { museSpark } from "../_shared/muse.ts";
 import type { ChatMessage } from "../_shared/tools/types.ts";
@@ -33,6 +33,9 @@ Deno.serve(async (req) => {
     .filter((m) => typeof m?.text === "string" && typeof m?.sender === "string")
     .slice(-MAX_MESSAGES);
 
-  const { isPlan, confidence, summary } = await detect(messages, museSpark(), body.user_name);
-  return reply({ isPlan, confidence, summary });
+  // `source` says whether Muse Spark answered or the keyword fallback did. Add ?debug=1 to
+  // also see why the model was skipped.
+  const { modelError, ...result } = await detect(messages, museSpark(), body.user_name);
+  const debug = new URL(req.url).searchParams.get("debug") === "1";
+  return reply(debug ? { ...result, modelError } : result);
 });

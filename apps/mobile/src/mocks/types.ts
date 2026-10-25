@@ -131,8 +131,11 @@ export type AgentStep = {
     | "search_hotels"
     | "search_places"
     | "pin_on_map"
+    | "create_poll"
+    | "tally_votes"
     | "verify"
-    | "ask_user";
+    | "ask_user"
+    | "book";
   label: string; // "Searching flights AUS → DEN"
   detail: string; // "Found 14 flights, best $142"
   durationMs: number; // how long the mock playback shows it running

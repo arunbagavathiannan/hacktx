@@ -1,7 +1,7 @@
 import { Redirect, router, useLocalSearchParams } from "expo-router";
-import { Info, MapTrifold, PaperPlaneTilt } from "phosphor-react-native";
-import { type ComponentRef, useMemo, useRef, useState } from "react";
-import { useWindowDimensions, View } from "react-native";
+import { ArrowSquareOut, Info, MapTrifold, PaperPlaneTilt } from "phosphor-react-native";
+import { type ComponentRef, useEffect, useMemo, useRef, useState } from "react";
+import { Linking, Pressable, useWindowDimensions, View } from "react-native";
 import { BudgetLine, DaySection, StaySection } from "@/components/booked/DayPlan";
 import { buildItinerary, summaryText } from "@/components/booked/itinerary";
 import { Reveal } from "@/components/booked/Reveal";
@@ -15,7 +15,9 @@ import {
 } from "@/components/booked/share";
 import { gasPerPerson, planLegs } from "@/components/route/legs";
 import { Body, Button, Caption, Display, Muted, Screen, Title } from "@/components/ui";
+import { LIVE, LIVE_ID } from "@/lib/live";
 import type { Trip } from "@/mocks/types";
+import { useLive } from "@/store/live";
 import { isDriving, useDestination, usePlan } from "@/store/plan";
 import { colors } from "@/theme";
 import { stagger } from "@/theme/motion";
@@ -47,7 +49,8 @@ function Booked() {
   // __DEV__ because PR screenshots come from the production web export. Nothing in the app
   // links to them.
   const { demo } = useLocalSearchParams<{ demo?: string }>();
-  const { trip, flights, places } = useDestination();
+  const { id, trip, flights, places } = useDestination();
+  const isLive = LIVE && id === LIVE_ID;
   const storePicks = usePlan((s) => s.picks);
   const picks = demo === "empty" ? [] : storePicks;
   // "Drive" swaps the flight for split gas, the same numbers the map footer uses.
@@ -141,12 +144,16 @@ function Booked() {
           >
             {status ?? ""}
           </Muted>
-          {/* MOCK: booking is simulated (CLAUDE.md "Real vs. mocked"). Said plainly, as a
-              footnote. */}
-          <View className="flex-row items-center justify-center gap-1.5">
-            <Info size={16} color={colors.faint} />
-            <Caption>Demo booking: nothing was charged</Caption>
-          </View>
+          {isLive ? (
+            <LiveBooking />
+          ) : (
+            /* MOCK: booking is simulated (CLAUDE.md "Real vs. mocked"). Said plainly, as a
+              footnote. */
+            <View className="flex-row items-center justify-center gap-1.5">
+              <Info size={16} color={colors.faint} />
+              <Caption>Demo booking: nothing was charged</Caption>
+            </View>
+          )}
         </Reveal>
       </View>
 
@@ -167,6 +174,61 @@ function Booked() {
         ))}
       </Reveal>
     </Screen>
+  );
+}
+
+// Live mode (lib/live.ts): the agent's book step, with real places to book each part (SerpAPI
+// booking options), cheapest first. Huddle never pays; each row opens the seller.
+function LiveBooking() {
+  const booking = useLive((s) => s.booking);
+  useEffect(() => {
+    useLive.getState().book();
+  }, []);
+
+  if (!booking) {
+    return <Muted className="text-center">Finding the best places to book…</Muted>;
+  }
+  // Up to three sellers per item: the cheapest few, and the official site when it's listed.
+  const items = [...new Set(booking.offers.map((o) => o.item))];
+  return (
+    <View className="gap-3 rounded-card bg-surface p-4">
+      <Muted numeric className="text-ink">
+        {booking.summary}
+      </Muted>
+      {items.map((item) => (
+        <View key={item} className="gap-1">
+          <Caption className="text-muted">{item}</Caption>
+          {booking.offers
+            .filter((o) => o.item === item)
+            .slice(0, 3)
+            .map((o) => (
+              <Pressable
+                key={`${item}-${o.seller}`}
+                accessibilityRole="link"
+                accessibilityLabel={`Book ${item} on ${o.seller}, $${o.priceUsd}`}
+                disabled={!o.url}
+                onPress={() => o.url && Linking.openURL(o.url)}
+                className="min-h-11 flex-row items-center justify-between rounded-lg px-2 active:bg-raised"
+              >
+                <Body className="flex-1">
+                  {o.seller}
+                  {o.official ? " · official" : ""}
+                </Body>
+                <Body numeric className="text-ink">
+                  ${o.priceUsd}
+                </Body>
+                {o.url ? (
+                  <ArrowSquareOut size={16} color={colors.muted} style={{ marginLeft: 8 }} />
+                ) : null}
+              </Pressable>
+            ))}
+        </View>
+      ))}
+      <View className="flex-row items-center justify-center gap-1.5 pt-1">
+        <Info size={16} color={colors.faint} />
+        <Caption>Huddle doesn't charge anything; each link goes to the seller</Caption>
+      </View>
+    </View>
   );
 }
 

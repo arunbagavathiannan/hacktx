@@ -1,11 +1,4 @@
-import {
-  type Category,
-  type Option,
-  type Tool,
-  type ToolArgs,
-  type ToolContext,
-  ToolError,
-} from "./types.ts";
+import type { Category, Option, Tool, ToolArgs, ToolContext } from "./types.ts";
 
 // Wraps a typed tool so the registry can hold every tool in one list. runTool checks required
 // args against the schema before calling run.
@@ -73,9 +66,5 @@ export function clampResults(value: unknown, fallback = 5) {
   return Math.min(Math.max(n, 1), 8);
 }
 
-export function requireDemoCity(location: string, what: string) {
-  // MOCK: fixtures only cover the demo trip. Live SerpAPI / Places calls replace this.
-  if (!/denver|\bden\b/i.test(location)) {
-    throw new ToolError(`Demo ${what} data only covers Denver, not "${location}".`);
-  }
-}
+// MOCK: the fixtures only cover the demo trip.
+export const isDemoCity = (location: string) => /denver|\bden\b/i.test(location);

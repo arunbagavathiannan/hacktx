@@ -10,25 +10,59 @@ arguments), a `describe` line for the timeline, and a handler. `index.ts` export
 
 | Tool | Does | Mock? |
 |---|---|---|
-| `extract_trip` | Who / where / when / budget from the chat → `plans.trip` | MOCK: demo trip (people from real senders) |
-| `search_flights` | Google Flights via SerpAPI | MOCK: fixture, AUS → DEN only |
-| `search_hotels` | Google Hotels via SerpAPI | MOCK: fixture, Denver only |
-| `search_places` | Google Places restaurants / activities | MOCK: fixture, Denver only |
+| `extract_trip` | Who / where / when / budget from **any** chat (one Muse Spark call) → `plans.trip`; gaps go in `missing` so the agent asks | demo trip only when there is no Muse Spark key |
+| `search_flights` | SerpAPI `google_flights` | live with `SERPAPI_API_KEY`; else fixture (AUS → DEN) |
+| `search_hotels` | SerpAPI `google_hotels` | live with `SERPAPI_API_KEY`; else fixture (Denver) |
+| `search_places` | SerpAPI `google_maps` (restaurants / activities) | live with `SERPAPI_API_KEY`; else fixture (Denver) |
 | `pin_on_map` | Saves chosen results to `plan_options` (map pins + vote options) | real |
 | `create_poll` | Opens a vote on a category's pinned options | seeds other members' votes (MOCK) |
 | `tally_votes` | Counts votes, marks the winner, sets the plan `ready` | real |
 | `ask_user` | Sets `pending_question`, plan `needs_input` | real |
-| `book` | Confirmation code + total; refuses unless the user tapped Book | MOCK: no real booking |
+| `book` | Live SerpAPI booking options (Google Flights sellers, Google Hotels site prices) with links, cheapest first; total + confirmation code; refuses unless the user tapped Book | MOCK: confirmation code only; no payment (links out to book) |
 
 Search results get a `ref` (`hotel_2`). The model uses refs for every later call.
 
-Fixtures in `../mocks/` use the real API response shapes, so going live means replacing the
-fixture read with a `fetch`. Keys (Muse Spark, SerpAPI, Google) come from Supabase secrets
+Searches go through `../serpapi.ts`. If a live call fails, the tool falls back to the fixture in
+`../mocks/` (same response shape) when one exists, so the demo never shows an empty screen;
+`details.source` says which one was used. Keys (Muse Spark, SerpAPI) come from Supabase secrets
 via `Deno.env.get(...)`, never from the app.
 
 Tools read and write through `PlanStore` (`store.ts`): `supabaseStore(client)` in the Edge
 Function, `memoryStore(plan)` in tests.
 
 ```sh
-deno test supabase/functions/_shared/tools/
+deno test --allow-env supabase/functions/_shared/tools/
 ```
+
+## API-call guards
+
+No failure turns into a loop of paid calls:
+
+- **Per run** (`agent/loop.ts`): at most 10 tool calls and 14 Muse Spark calls; an identical
+  repeat of a read-only call (`extract_trip`, `search_*`) is answered from cache; a tool that
+  fails twice is skipped for the rest of the run. Live calls are never retried.
+- **SerpAPI** (`../serpapi.ts`): each engine has its own timeout (Flights 15 s, Hotels 12 s,
+  Maps 8 s; each tool allows 3 s more). A bad key or quota error (401 / 403 / 429) pauses all
+  live calls for 10 min; a server or network error pauses only that engine for 60 s.
+  Timeouts, 400s and "no results" don't pause anything.
+- **Verifier**: its Muse Spark call gets 35 s and only the fields it checks. Going over
+  budget is a warning ("Heads up: …" in the summary), never a blocker.
+- **Re-runs**: when a plan runs again (the group answered Huddle's question), its old
+  options and votes are cleared first, so two cities never mix.
+- **detect**: chats with nothing trip-like skip Muse Spark; the same batch within 10 minutes
+  reuses the earlier answer.
+- **agent**: a second run of a plan that's already running gets `409`; booking a plan that's
+  already booked returns the same confirmation with no new lookups.
+
+## Preferences
+
+The app sends the owner's onboarding answers as `preferences` (same shape as the app's
+`Preferences`) when it starts a run. `../preferences.ts` cleans them up, and then:
+
+- **Planner:** gets them in its first message ("My preferences: …"). Food is a hard rule.
+- **search_hotels:** the budget tier caps the nightly price (`$` ≈ $200, `$$` ≈ $350, `$$$` none)
+  unless the model sets its own cap.
+- **search_flights:** "Short flight (<3h)" means nonstop unless the model says otherwise.
+- **search_places:** dietary needs are added to restaurant searches ("… Vegetarian friendly").
+- **Verifier:** code checks the chosen hotel against the budget tier and flags flights with
+  stops for "Short flight"; the model pass checks restaurants against food restrictions.
