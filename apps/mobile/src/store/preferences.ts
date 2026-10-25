@@ -19,3 +19,9 @@ export const usePreferences = create<State>()((set) => ({
   finishOnboarding: () => set({ onboarded: true }),
   reset: () => set({ ...empty, onboarded: false }),
 }));
+
+// Preferences live in memory only (onboarding shows on every launch), so they are always
+// "loaded". Kept so onboarding/settings can keep gating on it if persistence comes back.
+export function usePreferencesHydrated() {
+  return true;
+}

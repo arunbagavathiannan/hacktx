@@ -1,5 +1,6 @@
 import { Redirect, router, useLocalSearchParams } from "expo-router";
 import { ChatsCircle, GearSix, Sparkle } from "phosphor-react-native";
+import { View } from "react-native";
 import { IconButton } from "@/components/home/IconButton";
 import { PastPlans } from "@/components/home/PastPlans";
 import { PlanCard } from "@/components/home/PlanCard";
