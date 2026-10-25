@@ -1,9 +1,8 @@
 import { LinearGradient } from "expo-linear-gradient";
-import { ChatsCircle } from "phosphor-react-native";
 import type { ComponentRef, Ref } from "react";
 import { StyleSheet, Text, View } from "react-native";
 import Svg, { Circle, Path } from "react-native-svg";
-import { AvatarStack } from "@/components/ui";
+import { AvatarStack, Perforation } from "@/components/ui";
 import type { PlaceCategory, Trip } from "@/mocks/types";
 import { colors } from "@/theme";
 import { kindIcons } from "./icons";
@@ -25,6 +24,7 @@ const CARD_WIDTH = 336;
 const CARD_HEIGHT = 420;
 const SKY = 158;
 const MAX_ROWS = 4;
+const TABULAR = { fontVariant: ["tabular-nums" as const] };
 // Room for the city name: card width minus the px-6 padding on both sides.
 const TITLE_WIDTH = CARD_WIDTH - 48;
 
@@ -92,22 +92,6 @@ function Horizon() {
   );
 }
 
-// Ticket-stub tear line with notches on both edges.
-function Perforation() {
-  return (
-    <View className="h-5 flex-row items-center">
-      <View className="-ml-2.5 h-5 w-5 rounded-full bg-bg" />
-      <View className="flex-1 flex-row justify-between px-2">
-        {Array.from({ length: 22 }, (_, i) => (
-          // biome-ignore lint/suspicious/noArrayIndexKey: static decoration, never reorders
-          <View key={i} className="h-[2px] w-[6px] rounded-full bg-line" />
-        ))}
-      </View>
-      <View className="-mr-2.5 h-5 w-5 rounded-full bg-bg" />
-    </View>
-  );
-}
-
 type Props = { trip: Trip; itinerary: Itinerary; ref?: Ref<ComponentRef<typeof View>> };
 
 export function ShareCard({ trip, itinerary, ref }: Props) {
@@ -139,69 +123,65 @@ export function ShareCard({ trip, itinerary, ref }: Props) {
             style={StyleSheet.absoluteFill}
           />
           <Horizon />
-          <View className="flex-row items-start justify-between px-6 pt-5">
-            <View className="gap-0.5">
-              <Text className="font-body-bold text-[11px] uppercase tracking-[2.5px] text-bg/70">
-                {trip.sourceChat.name} · {shortDates(trip)}
-              </Text>
-              <Text
-                numberOfLines={1}
-                adjustsFontSizeToFit
-                className="font-display text-bg"
-                style={cityTitleStyle(trip.destination.city)}
-              >
-                {trip.destination.city}
-              </Text>
-            </View>
-            <View className="mt-0.5 h-7 w-7 items-center justify-center rounded-full bg-bg/15">
-              <ChatsCircle size={16} color={colors.bg} weight="fill" />
-            </View>
+          <View className="px-6 pt-5">
+            <Text
+              numberOfLines={1}
+              adjustsFontSizeToFit
+              className="font-display text-bg"
+              style={cityTitleStyle(trip.destination.city)}
+            >
+              {trip.destination.city}
+            </Text>
+            <Text className="font-body-semibold text-small text-bg/70" style={TABULAR}>
+              {trip.sourceChat.name} · {shortDates(trip)}
+            </Text>
           </View>
         </View>
 
-        <Perforation />
+        <Perforation notchColor={colors.bg} />
 
         <View className="flex-1 gap-2 px-6 pt-1">
           {rows.map((row) => {
             const RowIcon = kindIcons[row.kind];
             return (
               <View key={row.key} className="h-7 flex-row items-center gap-3">
-                <View className="h-7 w-7 items-center justify-center rounded-full bg-accent-soft">
-                  <RowIcon size={15} color={colors.accent} weight="regular" />
-                </View>
-                <Text numberOfLines={1} className="flex-1 font-body-bold text-[14px] text-ink">
+                <RowIcon size={18} color={colors.accent} weight="regular" />
+                <Text numberOfLines={1} className="flex-1 font-body-semibold text-small text-ink">
                   {row.title}
                 </Text>
-                <Text className="font-body-semibold text-xs text-muted">{row.when}</Text>
+                <Text className="font-body-medium text-caption text-muted" style={TABULAR}>
+                  {row.when}
+                </Text>
               </View>
             );
           })}
           {more > 0 ? (
-            <Text className="pl-10 font-body-semibold text-xs text-faint">+{more} more</Text>
+            <Text className="pl-[30px] font-body-medium text-caption text-faint" style={TABULAR}>
+              +{more} more
+            </Text>
           ) : null}
         </View>
 
         <View className="flex-row items-end justify-between border-t border-line px-6 pb-3 pt-3">
           <View className="gap-1.5">
             <AvatarStack members={trip.members} size="sm" max={5} />
-            <Text className="font-body-semibold text-xs text-muted">
+            <Text className="font-body-medium text-caption text-muted" style={TABULAR}>
               {trip.members.length} going
             </Text>
           </View>
           <View className="items-end">
-            <Text className="font-display text-[30px] leading-[34px] text-ink">
+            <Text className="font-display text-display text-ink" style={TABULAR}>
               ~${itinerary.perPerson}
             </Text>
-            <Text className="font-body-semibold text-xs text-muted">
+            <Text className="font-body-medium text-caption text-muted" style={TABULAR}>
               each{budget ? ` · ${budget}` : ""}
             </Text>
           </View>
         </View>
 
-        <View className="flex-row items-center justify-center gap-1.5 bg-raised py-2">
-          <ChatsCircle size={12} color={colors.accent} weight="fill" />
-          <Text className="font-body-bold text-[11px] tracking-wide text-muted">
-            Planned with Huddle
+        <View className="items-center bg-raised py-2">
+          <Text className="font-body-medium text-caption text-muted">
+            Planned with <Text className="font-display text-ink">Huddle</Text>
           </Text>
         </View>
       </View>

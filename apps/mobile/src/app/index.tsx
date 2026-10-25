@@ -1,12 +1,10 @@
 import { Redirect, router, useLocalSearchParams } from "expo-router";
-import { ChatsCircle, GearSix, Sparkle } from "phosphor-react-native";
+import { GearSix } from "phosphor-react-native";
 import { View } from "react-native";
-import { IconButton } from "@/components/home/IconButton";
 import { PastPlans } from "@/components/home/PastPlans";
 import { PlanCard } from "@/components/home/PlanCard";
-import { Button, Label, Muted, Screen, Title } from "@/components/ui";
+import { Button, Display, IconButton, Label, Muted, Screen } from "@/components/ui";
 import { usePreferences } from "@/store/preferences";
-import { colors, icon } from "@/theme";
 
 // Home: the plans Huddle spotted in your chats. In the demo, the plan starts from the
 // popup (/plan/incoming).
@@ -18,45 +16,28 @@ export default function Home() {
   if (!isDemo && !onboarded) return <Redirect href="/onboarding" />;
 
   return (
-    <Screen scroll className="gap-6">
-      <View className="flex-row items-center justify-between pt-3">
-        <View
-          accessible
-          accessibilityRole="header"
-          accessibilityLabel="Huddle"
-          className="flex-row items-center gap-2"
-        >
-          <ChatsCircle size={30} color={colors.accent} weight={icon.activeWeight} />
-          <Title>Huddle</Title>
+    <Screen
+      scroll
+      className="gap-8"
+      // "Simulate a plan" starts the live demo, so it stays the screen's one primary action,
+      // in the sticky footer where every other screen keeps its CTA.
+      footer={
+        <View className="gap-2">
+          <Muted>Plays a group chat turning into a plan, with the popup you'd get.</Muted>
+          <Button label="Simulate a plan" onPress={() => router.push("/plan/incoming")} />
         </View>
+      }
+    >
+      <View className="flex-row items-center justify-between pt-3">
+        <Display accessibilityRole="header">Huddle</Display>
         <IconButton icon={GearSix} label="Settings" onPress={() => router.push("/settings")} />
       </View>
 
-      <View className="gap-3">
-        <View className="gap-1">
-          <Label>Spotted in your chats</Label>
-          <Muted>Huddle noticed this trip in your group chat. Tap to review it.</Muted>
-        </View>
-        <PlanCard onPress={() => router.push("/plan/summary")} />
-      </View>
+      <PlanCard onPress={() => router.push("/plan/summary")} />
 
-      <View className="gap-3">
-        <Label>Past plans</Label>
+      <View className="gap-1">
+        <Label accessibilityRole="header">Past plans</Label>
         <PastPlans />
-      </View>
-
-      <View className="gap-3 rounded-card border border-dashed border-line p-4">
-        <View className="gap-1">
-          <Label className="text-accent">Demo</Label>
-          <Muted>
-            Plays a group chat turning into a plan, with the popup you'd get on your phone.
-          </Muted>
-        </View>
-        <Button
-          label="Simulate a plan"
-          icon={<Sparkle size={20} color={colors.bg} weight={icon.activeWeight} />}
-          onPress={() => router.push("/plan/incoming")}
-        />
       </View>
     </Screen>
   );
