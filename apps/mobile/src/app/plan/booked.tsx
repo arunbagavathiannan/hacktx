@@ -19,6 +19,7 @@ import { gasPerPerson, planLegs } from "@/components/route/legs";
 import { Body, Button, Caption, Display, Muted, Screen, Title } from "@/components/ui";
 import { LIVE, LIVE_ID, planShareUrl } from "@/lib/live";
 import { offerEach } from "@/lib/pricing";
+import { DEMO_PLAN_ID } from "@/mocks/japanDemo";
 import type { Trip } from "@/mocks/types";
 import { useLive } from "@/store/live";
 import { isDriving, useDestination, usePlan, withFlight } from "@/store/plan";
@@ -67,7 +68,8 @@ function Booked() {
   // Live mode: the message carries a link to the whole plan (app/trip/[id].tsx), with the
   // picks the group made, so anyone in the chat can open it in full.
   const planId = useLive((s) => s.planId);
-  const shareUrl = isLive && planId ? planShareUrl(planId, picks) : null;
+  // The stage demo's plan (mocks/japanDemo.ts) isn't saved anywhere, so it has no link.
+  const shareUrl = isLive && planId && planId !== DEMO_PLAN_ID ? planShareUrl(planId, picks) : null;
   const text = useMemo(
     () => summaryText(trip, itinerary) + (shareUrl ? `\n\nSee the whole plan: ${shareUrl}` : ""),
     [trip, itinerary, shareUrl],

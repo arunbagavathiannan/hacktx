@@ -3,6 +3,10 @@ import type { Preferences } from "@/mocks/types";
 
 type State = Preferences & {
   onboarded: boolean;
+  // Demo switch (Settings): Huddle only reads the chat after a message from you, so a scripted
+  // group chat can be typed in full before the banner. Off = it reads after any message.
+  waitForYou: boolean;
+  setWaitForYou: (on: boolean) => void;
   set: (patch: Partial<Preferences>) => void;
   finishOnboarding: () => void;
   reset: () => void;
@@ -15,6 +19,8 @@ const empty: Preferences = { vibes: [], budget: null, food: [], maxTravel: null,
 export const usePreferences = create<State>()((set) => ({
   ...empty,
   onboarded: false,
+  waitForYou: false,
+  setWaitForYou: (on) => set({ waitForYou: on }),
   set: (patch) => set(patch),
   finishOnboarding: () => set({ onboarded: true }),
   reset: () => set({ ...empty, onboarded: false }),
