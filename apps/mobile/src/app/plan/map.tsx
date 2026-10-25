@@ -2,13 +2,13 @@ import { LinearGradient } from "expo-linear-gradient";
 import { Redirect, router, useLocalSearchParams } from "expo-router";
 import { ArrowRight, CaretLeft } from "phosphor-react-native";
 import { useMemo, useState } from "react";
-import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { ScrollView, StyleSheet, Text, View } from "react-native";
 import Animated, { useReducedMotion } from "react-native-reanimated";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { GlobeIntro } from "@/components/globe/GlobeIntro";
 import { categoryMeta, type Filter, filters } from "@/components/map/categories";
 import { FlightsRow } from "@/components/map/FlightsRow";
-import { MapCanvas } from "@/components/map/MapCanvas";
+import { Attribution, MapCanvas } from "@/components/map/MapCanvas";
 import { PlaceSheet } from "@/components/map/PlaceSheet";
 import { DriveCard } from "@/components/route/DriveCard";
 import {
@@ -20,7 +20,7 @@ import {
 } from "@/components/route/legs";
 import { RouteView } from "@/components/route/RouteView";
 import { type MapView, ViewToggle } from "@/components/route/ViewToggle";
-import { AvatarStack, Button, Chip, Heading, Muted } from "@/components/ui";
+import { AvatarStack, Button, Caption, Chip, Heading, IconButton, Muted } from "@/components/ui";
 import { groupSize } from "@/lib/pricing";
 import { places as denverPlaces, members } from "@/mocks";
 import { destinationSuggestions } from "@/mocks/destinations";
@@ -38,6 +38,11 @@ import { fadeIn, MAX_STAGGER_MS } from "@/theme/motion";
 
 // Room on the map for the overlays: filter chips on top, the flights row at the bottom.
 const MAP_INSETS = { top: 96, right: 52, bottom: 132, left: 52 };
+// The bottom overlays, from the map's bottom edge up: tile credits, then the flights row.
+const CREDITS_BOTTOM = 6;
+const FLIGHTS_BOTTOM = 26;
+// Prices and counts keep fixed-width digits, so the total doesn't jitter as picks change.
+const TABULAR = { fontVariant: ["tabular-nums" as const] };
 
 // Every flight id any trip on this screen knows, so flight picks never count as places.
 const ALL_FLIGHT_IDS = new Set(
@@ -178,21 +183,18 @@ function MapScreen() {
     <View className="flex-1 bg-bg">
       <SafeAreaView className="flex-1" edges={["top", "bottom"]}>
         <View className="flex-row items-center gap-3 px-5 pb-3 pt-2">
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel="Back"
+          <IconButton
+            icon={CaretLeft}
+            label="Back"
             onPress={() =>
               router.canGoBack() ? router.back() : router.replace("/plan/destinations")
             }
-            hitSlop={8}
-            className="h-10 w-10 items-center justify-center rounded-full border border-line bg-surface active:opacity-80"
-          >
-            <CaretLeft size={18} color={colors.ink} weight="regular" />
-          </Pressable>
+          />
           <View className="flex-1">
-            <Heading className="text-lg leading-6">{activeTrip.title}</Heading>
-            <Muted className="text-xs leading-4">
-              {activeTrip.dates.label} · {activeTrip.members.length} friends
+            <Heading numberOfLines={1}>{activeTrip.title}</Heading>
+            {/* Dates only: the avatars on the right already say who's going. */}
+            <Muted numberOfLines={1} numeric>
+              {activeTrip.dates.label}
             </Muted>
           </View>
           <AvatarStack members={activeTrip.members} size="sm" max={3} />
@@ -273,7 +275,7 @@ function MapScreen() {
               {revealed && firstLeg ? (
                 <Animated.View
                   entering={fadeIn(MAX_STAGGER_MS)}
-                  style={{ position: "absolute", bottom: 12, left: 0, right: 0 }}
+                  style={{ position: "absolute", bottom: FLIGHTS_BOTTOM, left: 0, right: 0 }}
                 >
                   {firstLeg.mode === "drive" ? (
                     <View className="px-5">
@@ -301,18 +303,33 @@ function MapScreen() {
                   )}
                 </Animated.View>
               ) : null}
+              {/* Esri requires the credits wherever the tiles show: plain text on the fade. */}
+              <Attribution bottom={CREDITS_BOTTOM} inset={20} />
             </>
           )}
         </View>
 
         <View className="gap-3 px-5 pb-2 pt-3">
-          <View className="flex-row items-center justify-between">
-            <View className="flex-row items-center gap-2 rounded-full bg-raised px-3.5 py-2">
-              <Text className="font-body-bold text-sm text-ink">
-                {pickCount} {pickCount === 1 ? "pick" : "picks"} · ${perPerson}/person est.
+          <View
+            accessible
+            accessibilityLabel={`${pickCount} ${pickCount === 1 ? "pick" : "picks"}, about $${perPerson} each. ${
+              fitsBudget ? "Under" : "Over"
+            } the $${activeTrip.budgetPerPerson} budget.`}
+            className="flex-row items-baseline justify-between gap-3"
+          >
+            <Text numberOfLines={1} className="flex-1 font-body text-small text-muted">
+              <Text className="font-body-bold text-headline text-ink" style={TABULAR}>
+                ${perPerson}
               </Text>
-            </View>
-            <Text className={`font-body-semibold text-xs ${fitsBudget ? "text-good" : "text-bad"}`}>
+              <Text style={TABULAR}>
+                {" "}
+                each, est. · {pickCount} {pickCount === 1 ? "pick" : "picks"}
+              </Text>
+            </Text>
+            <Text
+              className={`font-body-semibold text-small ${fitsBudget ? "text-good" : "text-bad"}`}
+              style={TABULAR}
+            >
               {fitsBudget
                 ? `Under the $${activeTrip.budgetPerPerson} budget`
                 : `Over the $${activeTrip.budgetPerPerson} budget`}
@@ -326,7 +343,7 @@ function MapScreen() {
           />
           {sandboxed ? (
             // MOCK: demo-only preview; its picks never reach the real plan.
-            <Muted className="text-center text-xs">Preview only. Booking is off here.</Muted>
+            <Caption className="text-center">Preview only. Booking is off here.</Caption>
           ) : null}
         </View>
       </SafeAreaView>
@@ -346,8 +363,8 @@ function MapScreen() {
           focus={intro.focus}
           points={intro.points}
           arcs={intro.arcs}
-          eyebrow={`Huddle found ${places.length + tripFlights.length} options`}
           subtitle={`${routeCodes} · ${activeTrip.dates.label}`}
+          note={`${places.length + tripFlights.length} options found`}
           frozenAt={demo === "globe" ? 0.55 : undefined}
           onDone={() => setIntroDone(true)}
         />

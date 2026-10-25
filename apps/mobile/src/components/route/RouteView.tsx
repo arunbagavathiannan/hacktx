@@ -25,7 +25,8 @@ type Props = {
 };
 
 const GLOBE_HEIGHT = 340;
-const LEGEND_INSET = 48; // the legend pill's strip at the bottom of the globe panel
+const LEGEND_INSET = 40; // the legend's strip at the bottom of the globe panel
+const TABULAR = { fontVariant: ["tabular-nums" as const] };
 
 const WEEKDAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
@@ -110,9 +111,10 @@ export function RouteView({
               bottomInset={LEGEND_INSET}
             />
           ) : null}
+          {/* Plain key along the panel's bottom edge, marks drawn to match the globe. */}
           <View
             pointerEvents="none"
-            className="absolute bottom-3 left-4 flex-row items-center gap-3.5 rounded-full border border-line bg-bg/85 px-3.5 py-1.5"
+            className="absolute bottom-3 left-5 flex-row items-center gap-4"
           >
             <LegendDot color={colors.gold} label="Home" ring />
             <LegendDot color={colors.accent} label={trip.stops.length > 1 ? "Stops" : "Stop"} />
@@ -133,14 +135,17 @@ export function RouteView({
           return (
             <Animated.View key={leg.key} entering={fadeIn(stagger(i))} className="gap-2">
               <View className="flex-row items-center gap-2 px-5">
-                <View className="h-5 w-5 items-center justify-center rounded-full bg-raised">
-                  <Text className="font-body-bold text-[10px] text-ink">{i + 1}</Text>
-                </View>
-                <Text className="flex-1 font-body-bold text-sm text-ink" numberOfLines={1}>
+                {/* The leg's order, as a plain number: it carries sequence, so it stays. */}
+                <Text className="w-4 font-body-semibold text-small text-faint" style={TABULAR}>
+                  {i + 1}
+                </Text>
+                <Text className="flex-1 font-body-semibold text-small text-ink" numberOfLines={1}>
                   {leg.leg.from} → {leg.leg.to}
                 </Text>
-                <Icon size={14} color={colors.muted} weight="regular" />
-                <Text className="font-body text-xs text-muted">{shortDay(legDay(trip, leg))}</Text>
+                <Icon size={16} color={colors.muted} weight="regular" />
+                <Text className="font-body text-caption text-muted" style={TABULAR}>
+                  {shortDay(legDay(trip, leg))}
+                </Text>
               </View>
 
               {leg.mode === "drive" ? (
@@ -164,7 +169,7 @@ export function RouteView({
                   showHeader={false}
                 />
               ) : (
-                <Text className="px-5 font-body text-xs text-muted">
+                <Text className="pl-11 pr-5 font-body text-caption text-muted">
                   {route} · included in your round-trip fare
                 </Text>
               )}
@@ -187,7 +192,7 @@ function LegendDot({ color, label, ring }: { color: string; label: string; ring?
             : { width: 9, height: 9, borderRadius: 5, backgroundColor: color }
         }
       />
-      <Text className="font-body-semibold text-[13px] text-ink">{label}</Text>
+      <Text className="font-body-medium text-caption text-muted">{label}</Text>
     </View>
   );
 }
@@ -196,7 +201,7 @@ function LegendLine({ color, label }: { color: string; label: string }) {
   return (
     <View className="flex-row items-center gap-1.5">
       <View style={{ width: 14, height: 3, borderRadius: 2, backgroundColor: color }} />
-      <Text className="font-body-semibold text-[13px] text-ink">{label}</Text>
+      <Text className="font-body-medium text-caption text-muted">{label}</Text>
     </View>
   );
 }

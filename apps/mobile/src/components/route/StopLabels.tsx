@@ -157,12 +157,13 @@ export function StopLabels({ points, projection, width, height, bottomInset, act
               ...wrapperStyle(box),
             }}
           >
+            {/* A map label, not a control: small radius, no stadium (pills mean "tap me"). */}
             <View
-              className="h-full flex-row items-center gap-1.5 rounded-full border bg-bg/90 px-2.5"
+              className="h-full flex-row items-center gap-1.5 rounded-lg border bg-bg/90 px-2.5"
               style={{ borderColor: lit ? tint : `${tint}66`, opacity: dim ? 0.5 : 1 }}
             >
               {p.code ? (
-                <Text className="font-body-bold text-[13px] tracking-wide" style={{ color: tint }}>
+                <Text className="font-body-bold text-[13px]" style={{ color: tint }}>
                   {p.code}
                 </Text>
               ) : null}

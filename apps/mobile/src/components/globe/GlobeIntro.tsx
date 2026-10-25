@@ -3,7 +3,7 @@ import { useEffect, useRef } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 import Animated from "react-native-reanimated";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { Label, Muted, Title } from "@/components/ui";
+import { Display, Muted } from "@/components/ui";
 import { colors } from "@/theme";
 import { DURATION, fadeIn, fadeOut, stagger } from "@/theme/motion";
 import type { GlobeArc, GlobePoint } from "./GlobeScene";
@@ -14,8 +14,8 @@ type Props = {
   focus: { lat: number; lng: number };
   points: GlobePoint[];
   arcs: GlobeArc[];
-  eyebrow: string; // "Huddle found 12 options"
   subtitle: string; // "AUS → DEN · Fri Nov 13 – Sun Nov 15"
+  note?: string; // "15 options found", a quieter line under the subtitle
   onDone: () => void;
   frozenAt?: number;
 };
@@ -33,8 +33,8 @@ export function GlobeIntro({
   focus,
   points,
   arcs,
-  eyebrow,
   subtitle,
+  note,
   onDone,
   frozenAt,
 }: Props) {
@@ -91,13 +91,19 @@ export function GlobeIntro({
 
         <Animated.View
           entering={fadeIn(stagger(1))}
-          style={{ gap: 4, paddingHorizontal: 24, paddingBottom: 40 }}
+          style={{ gap: 4, paddingHorizontal: 20, paddingBottom: 40 }}
           pointerEvents="none"
         >
-          <Label className="text-accent">{eyebrow}</Label>
-          <Title className="text-4xl leading-[44px]">{title}</Title>
+          <Display>{title}</Display>
           <Animated.View entering={fadeIn(stagger(3))}>
-            <Muted className="text-base">{subtitle}</Muted>
+            <Muted className="text-body" numeric>
+              {subtitle}
+            </Muted>
+            {note ? (
+              <Muted className="text-faint" numeric>
+                {note}
+              </Muted>
+            ) : null}
           </Animated.View>
         </Animated.View>
       </SafeAreaView>

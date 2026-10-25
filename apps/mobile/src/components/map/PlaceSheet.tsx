@@ -8,7 +8,7 @@ import { Check, Clock, MapPin, NavigationArrow, Plus, Star } from "phosphor-reac
 import { type ReactNode, useEffect, useRef, useState } from "react";
 import { Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { AvatarStack, Body, Button, Heading, Muted } from "@/components/ui";
+import { AvatarStack, Body, Button, Muted, Title } from "@/components/ui";
 import type { Member, Place } from "@/mocks/types";
 import { colors } from "@/theme";
 import { categoryMeta, sourceLabel } from "./categories";
@@ -21,6 +21,8 @@ type Props = {
   onDismiss: () => void;
 };
 
+const TABULAR = { fontVariant: ["tabular-nums" as const] };
+
 const formatCount = (n: number) =>
   n >= 1000 ? `${(n / 1000).toFixed(n >= 10_000 ? 0 : 1).replace(/\.0$/, "")}k` : `${n}`;
 
@@ -30,11 +32,12 @@ function names(members: Member[]) {
   return `${list.slice(0, -1).join(", ")}, and ${list[list.length - 1]}`;
 }
 
+// One fact per row, hairline between rows, no box around them.
 function InfoRow({ icon, children }: { icon: ReactNode; children: ReactNode }) {
   return (
-    <View className="flex-row items-center gap-2.5">
+    <View className="flex-row items-center gap-3 border-t border-line py-3">
       {icon}
-      <Body className="flex-1 text-[15px] text-ink">{children}</Body>
+      <Body className="flex-1">{children}</Body>
     </View>
   );
 }
@@ -76,23 +79,24 @@ export function PlaceSheet({ place, picked, pickers, onToggle, onDismiss }: Prop
         {shown && meta ? (
           <View className="gap-4 px-5 pt-1">
             <View className="gap-2">
-              <View className="flex-row items-center justify-between">
-                <View
-                  className="flex-row items-center gap-1.5 rounded-full px-2.5 py-1"
-                  style={{ backgroundColor: `${meta.color}22` }}
-                >
-                  <meta.Icon size={14} color={meta.color} weight="fill" />
-                  <Text className="font-body-bold text-xs" style={{ color: meta.color }}>
+              <View className="flex-row items-center justify-between gap-3">
+                <View className="flex-row items-center gap-1.5">
+                  <meta.Icon size={18} color={meta.color} weight="regular" />
+                  <Text className="font-body-semibold text-small" style={{ color: meta.color }}>
                     {meta.label}
                   </Text>
                 </View>
-                <Text className="font-body text-xs text-faint">{sourceLabel[shown.source]}</Text>
+                <Text className="font-body text-caption text-faint">
+                  {sourceLabel[shown.source]}
+                </Text>
               </View>
-              <Heading className="text-2xl leading-8">{shown.name}</Heading>
+              <Title>{shown.name}</Title>
               <View className="flex-row flex-wrap items-center gap-x-1.5">
-                <Star size={15} color={colors.gold} weight="fill" />
-                <Text className="font-body-bold text-sm text-ink">{shown.rating.toFixed(1)}</Text>
-                <Text className="font-body text-sm text-muted">
+                <Star size={16} color={colors.gold} weight="fill" />
+                <Text className="font-body-semibold text-small text-ink" style={TABULAR}>
+                  {shown.rating.toFixed(1)}
+                </Text>
+                <Text className="font-body text-small text-muted" style={TABULAR}>
                   ({formatCount(shown.reviews)} reviews) · {shown.price}
                 </Text>
               </View>
@@ -100,7 +104,7 @@ export function PlaceSheet({ place, picked, pickers, onToggle, onDismiss }: Prop
 
             <Body className="text-muted">{shown.blurb}</Body>
 
-            <View className="gap-2.5 rounded-2xl border border-line px-4 py-3.5">
+            <View className="border-b border-line">
               {shown.hours ? (
                 <InfoRow icon={<Clock size={18} color={colors.muted} weight="regular" />}>
                   {shown.hours}

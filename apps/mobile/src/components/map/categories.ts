@@ -6,12 +6,18 @@ export type Filter = "all" | PlaceCategory;
 
 type Meta = { label: string; chip: string; color: string; Icon: Icon };
 
-// One color per category so the map reads at a glance. Theme colors where they fit.
+// Dusk palette for the two categories the theme has no token for (DESIGN.md cat-do and
+// cat-night). Map-only: these never appear outside pins, pin icons and filter-chip icons.
+export const CAT_DO = "#5FC0C8"; // dusk teal
+export const CAT_NIGHT = "#F0789A"; // dusk rose
+
+// One color per category so the map reads at a glance. Stay is gold, food is the sunset
+// accent; green stays reserved for success.
 export const categoryMeta: Record<PlaceCategory, Meta> = {
   hotel: { label: "Hotel", chip: "Stay", color: colors.gold, Icon: Bed },
   food: { label: "Food", chip: "Food", color: colors.accent, Icon: ForkKnife },
-  activity: { label: "Thing to do", chip: "Do", color: colors.good, Icon: Ticket },
-  nightlife: { label: "Nightlife", chip: "Night", color: "#B9A5FF", Icon: Martini },
+  activity: { label: "Thing to do", chip: "Do", color: CAT_DO, Icon: Ticket },
+  nightlife: { label: "Nightlife", chip: "Night", color: CAT_NIGHT, Icon: Martini },
 };
 
 export const filters: Array<{ id: Filter; label: string }> = [

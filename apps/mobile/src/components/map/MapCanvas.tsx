@@ -5,20 +5,11 @@ import type { Member, Place } from "@/mocks/types";
 import { colors } from "@/theme";
 import { PlaceCallout } from "./PlaceCallout";
 import { PIN_SIZE, PlacePin } from "./PlacePin";
-import {
-  ATTRIBUTION_TOP,
-  corePlaceIds,
-  fitMap,
-  type Insets,
-  type Size,
-  spreadPins,
-  TOP_FADE,
-  withAttributionRoom,
-} from "./projection";
-import { Attribution } from "./tiles/Attribution";
+import { corePlaceIds, fitMap, type Insets, type Size, spreadPins, TOP_FADE } from "./projection";
 import { TileLayer } from "./tiles/TileLayer";
 
 // Call from an earlier screen (e.g. /plan/summary) to warm the tile cache before the map opens.
+export { Attribution } from "./tiles/Attribution";
 export { prefetchMapTiles } from "./tiles/prefetch";
 
 type Props = {
@@ -40,6 +31,8 @@ const EDGE_MARGIN = 48;
 
 // Real streets from Esri's Dark Gray Canvas tiles, fitted to the places, with our own pins on
 // top. The same props would drive a react-native-maps <MapView> with <Marker>s later.
+// The parent draws the tile credits (tiles/Attribution) over its bottom fade, so they stay
+// readable and never sit on the pins.
 export function MapCanvas({
   places,
   boundsFrom,
@@ -47,16 +40,13 @@ export function MapCanvas({
   pickedIds,
   selectedId,
   onSelect,
-  insets: overlayInsets,
+  insets,
   revealed,
   onTogglePick,
   onOpenDetails,
   onDismiss,
 }: Props) {
   const [size, setSize] = useState<Size | null>(null);
-  // The overlays' room plus a strip under the top fade for the attribution, kept pin-free.
-  const insets = useMemo(() => withAttributionRoom(overlayInsets), [overlayInsets]);
-
   const core = useMemo(() => corePlaceIds(boundsFrom), [boundsFrom]);
 
   const proj = useMemo(
@@ -151,9 +141,6 @@ export function MapCanvas({
           })}
         </Svg>
       ) : null}
-
-      {/* Required wherever the tiles show: just below the top fade, under the pins. */}
-      {size ? <Attribution top={ATTRIBUTION_TOP} maxWidth={size.width - 16} /> : null}
 
       {revealed
         ? pins.map((p, i) => (

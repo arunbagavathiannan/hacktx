@@ -30,8 +30,10 @@ export const LAYERS: Layer[] = [
   },
 ];
 
-// Esri's gray is lighter than the app; this warm wash pulls it toward `colors.bg` so the pins pop.
-const SHADE_OPACITY = 0.5;
+// Esri's gray is lighter than the app; this warm wash pulls it toward `colors.bg`. Light
+// enough that streets and neighborhoods still read (the pins sit on a real city), strong
+// enough that the pins stay the brightest thing on the map.
+const SHADE_OPACITY = 0.28;
 // Dark Gray Canvas's land color. Shown under tiles that are still loading, so a slow tile
 // reads as plain land (streets fade in) instead of a black hole in a checkerboard.
 const LAND = "#535355";

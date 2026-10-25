@@ -2,7 +2,8 @@ import { useFrame, useThree } from "@react-three/fiber";
 import { type RefObject, useEffect, useMemo, useRef } from "react";
 import * as THREE from "three";
 import { colors } from "@/theme";
-import { degreesBetween, easeInOutCubic, landDots, latLngToXYZ } from "./geo";
+import { PULSE } from "@/theme/motion";
+import { degreesBetween, easeInOutCubic, easeOutCubic, landDots, latLngToXYZ } from "./geo";
 
 type LatLng = { lat: number; lng: number };
 
@@ -26,7 +27,7 @@ export type GlobeProps = {
   frozenAt?: number;
   onDone?: () => void;
   onFirstFrame?: () => void; // GL is up and drawing (used by SafeGlobe's timeout)
-  // Overview only. Dots that travel along the arcs and rings that pulse on the stops. Pass
+  // Overview only. Dots that travel along the arcs and rings that breathe on the stops. Pass
   // false for reduced motion.
   ambient?: boolean;
   // Overview only. Screen positions of `points` and the arcs once the camera settles (and
@@ -285,17 +286,18 @@ function drawShare(g: THREE.BufferGeometry, share: number) {
 // Samples per arc in the screen projection (label placement treats them as obstacles).
 const ARC_SAMPLES = 32;
 
-// A ring lying flat on the surface that pulses outward from a stop.
-function PulseRing({
+// A ring lying flat on the surface around a stop, at a fixed size, breathing in opacity only
+// (DESIGN.md "Motion": the `PULSE` loop, no scaling rings): 100% → PULSE.min → 100% over
+// two PULSE.durations, eased by a cosine so it never snaps.
+const RING_OPACITY = 0.8;
+function BreathingRing({
   at,
   offset,
-  from = 0.02,
-  span = 0.07,
+  radius = 0.032,
 }: {
   at: THREE.Vector3;
-  offset: number;
-  from?: number;
-  span?: number;
+  offset: number; // seconds, so neighboring stops don't breathe in lockstep
+  radius?: number;
 }) {
   const ring = useRef<THREE.Mesh>(null);
   const t = useRef(offset);
@@ -307,14 +309,14 @@ function PulseRing({
   useFrame((_, delta) => {
     t.current += Math.min(delta, MAX_DELTA);
     if (!ring.current) return;
-    const pulse = (t.current / 1.1) % 1;
-    const s = from + pulse * span;
-    ring.current.scale.set(s, s, s);
-    (ring.current.material as THREE.MeshBasicMaterial).opacity = (1 - pulse) * 0.8;
+    const cycle = (2 * PULSE.duration) / 1000;
+    const wave = (1 + Math.cos((2 * Math.PI * t.current) / cycle)) / 2; // 1 → 0 → 1
+    const level = PULSE.min + (1 - PULSE.min) * wave;
+    (ring.current.material as THREE.MeshBasicMaterial).opacity = RING_OPACITY * level;
   });
 
   return (
-    <mesh ref={ring} position={at}>
+    <mesh ref={ring} position={at} scale={radius}>
       <ringGeometry args={[0.8, 1, 40]} />
       <meshBasicMaterial
         color={colors.accent}
@@ -511,7 +513,8 @@ export function GlobeScene({
   useFrame((_, delta) => {
     elapsed.current += Math.min(delta, MAX_DELTA) * 1000;
     const progress = frozenAt ?? clamp01(elapsed.current / durationMs);
-    const e = easeInOutCubic(progress);
+    // One ease-out for the whole swing: no slow wind-up, no overshoot past the frame.
+    const e = easeOutCubic(progress);
 
     if (frame) {
       // Swing in from over the Atlantic, settling over the whole route.
@@ -666,13 +669,13 @@ export function GlobeScene({
         : markers
             .filter((m) => m.kind === "stop")
             .map((m, i) => (
-              <PulseRing
+              <BreathingRing
                 // biome-ignore lint/suspicious/noArrayIndexKey: points are a fixed list per trip
                 key={i}
                 at={m.at}
                 offset={i * 0.45}
-                from={overview ? OVERVIEW.stopPx * px : undefined}
-                span={overview ? 18 * px : undefined}
+                // Overview: a halo a few px outside the stop's dot (sizes are in screen px).
+                radius={overview ? (OVERVIEW.stopPx + 7) * px : undefined}
               />
             ))}
       {overview && ambient

@@ -33,6 +33,8 @@ const GAP = 8; // between the tail tip and the pin
 const TAIL = 14; // side of the rotated square that makes the tail
 const BELOW_EXTRA = 10; // the friends' faces hang under a pin
 
+const TABULAR = { fontVariant: ["tabular-nums" as const] };
+
 const formatCount = (n: number) =>
   n >= 1000 ? `${(n / 1000).toFixed(n >= 10_000 ? 0 : 1).replace(/\.0$/, "")}k` : `${n}`;
 
@@ -122,28 +124,28 @@ export function PlaceCallout({
         className="gap-2.5 rounded-card border border-line bg-surface p-3.5"
         style={{ boxShadow: "0 12px 32px rgba(0, 0, 0, 0.55), 0 2px 6px rgba(0, 0, 0, 0.4)" }}
       >
-        <View accessible accessibilityLabel={summary} className="flex-row items-center gap-2.5">
-          <View
-            className="h-9 w-9 items-center justify-center rounded-full"
-            style={{ backgroundColor: `${meta.color}22` }}
-          >
-            <meta.Icon size={18} color={meta.color} weight="regular" />
-          </View>
-          <View className="flex-1">
-            <Text numberOfLines={1} className="font-display text-[17px] leading-6 text-ink">
-              {place.name}
-            </Text>
-            <View className="flex-row items-center gap-1">
-              <Star size={13} color={colors.gold} weight="fill" />
-              <Text className="font-body-bold text-[13px] text-ink">{place.rating.toFixed(1)}</Text>
-              <Text numberOfLines={1} className="flex-1 font-body text-[13px] text-muted">
-                ({formatCount(place.reviews)}) · {place.price}
+        {/* The pin under the tail already shows the category icon; here it's just a word. */}
+        <View accessible accessibilityLabel={summary} className="gap-0.5">
+          <Text numberOfLines={1} className="font-display-medium text-headline text-ink">
+            {place.name}
+          </Text>
+          <View className="flex-row items-center gap-1">
+            <Star size={14} color={colors.gold} weight="fill" />
+            <Text
+              numberOfLines={1}
+              className="flex-1 font-body text-small text-muted"
+              style={TABULAR}
+            >
+              <Text className="font-body-semibold text-ink">{place.rating.toFixed(1)}</Text> (
+              {formatCount(place.reviews)}) · {place.price} ·{" "}
+              <Text className="font-body-medium" style={{ color: meta.color }}>
+                {meta.label}
               </Text>
-            </View>
+            </Text>
           </View>
         </View>
 
-        <Text numberOfLines={2} className="font-body text-[13px] leading-[18px] text-muted">
+        <Text numberOfLines={2} className="font-body text-small text-muted">
           {place.blurb}
         </Text>
 
@@ -152,7 +154,7 @@ export function PlaceCallout({
             {pickers.length > 0 ? (
               <AvatarStack members={pickers} size="sm" max={3} />
             ) : (
-              <Text className="font-body text-[13px] text-faint">No picks yet</Text>
+              <Text className="font-body text-caption text-faint">No picks yet</Text>
             )}
           </View>
           <Pressable
@@ -169,7 +171,7 @@ export function PlaceCallout({
             ) : (
               <Plus size={15} color={colors.bg} weight="regular" />
             )}
-            <Text className={`font-body-bold text-[13px] ${picked ? "text-ink" : "text-bg"}`}>
+            <Text className={`font-body-semibold text-small ${picked ? "text-ink" : "text-bg"}`}>
               {picked ? "Added" : "Add"}
             </Text>
           </Pressable>
@@ -179,7 +181,7 @@ export function PlaceCallout({
             onPress={onDetails}
             className="h-12 flex-row items-center gap-0.5 rounded-full border border-line pl-4 pr-3 active:opacity-80"
           >
-            <Text className="font-body-bold text-[13px] text-ink">Details</Text>
+            <Text className="font-body-semibold text-small text-ink">Details</Text>
             <CaretRight size={13} color={colors.muted} weight="regular" />
           </Pressable>
         </View>
