@@ -1,14 +1,14 @@
+import { LinearGradient } from "expo-linear-gradient";
 import { router, useLocalSearchParams } from "expo-router";
-import { ArrowRight, CheckCircle, ShieldCheck } from "phosphor-react-native";
+import { ArrowRight, ShieldCheck } from "phosphor-react-native";
 import { useRef, useState } from "react";
-import { ScrollView, type ScrollViewInstance, Text, View } from "react-native";
+import { ScrollView, type ScrollViewInstance, View } from "react-native";
 import Animated, { useReducedMotion } from "react-native-reanimated";
 import { destinationSteps } from "@/components/timeline/destinationSteps";
 import { LiveDot, ProgressBar } from "@/components/timeline/ProgressBar";
 import { ReadyRow, StepRow } from "@/components/timeline/StepRow";
 import { type PlaybackStep, useStepPlayback } from "@/components/timeline/useStepPlayback";
-import { AvatarStack, Button, Label, Muted, Screen, Title } from "@/components/ui";
-import { cn } from "@/lib/cn";
+import { AvatarStack, Button, Caption, Muted, Screen, Title } from "@/components/ui";
 import { brief } from "@/mocks";
 import { destinationSuggestions } from "@/mocks/destinations";
 import { usePreferences } from "@/store/preferences";
@@ -67,57 +67,59 @@ export default function Working() {
         )
       }
     >
-      <View className="gap-3 px-5 pb-4 pt-4">
-        <View className="flex-row items-center gap-2">
-          {ready ? (
-            <Animated.View entering={instant ? undefined : fadeIn()}>
-              <CheckCircle size={16} color={colors.good} weight="fill" />
-            </Animated.View>
-          ) : (
-            <LiveDot />
-          )}
-          <Label
-            accessibilityLiveRegion="polite"
-            className={cn("flex-1", ready ? "text-good" : "text-accent")}
-          >
-            {ready ? "Ideas ready" : "Huddle is working"}
-          </Label>
-          <AvatarStack members={brief.members} size="sm" max={5} />
-        </View>
-
+      {/* Status is said once: the bar and the line under it. The ready row below is the payoff. */}
+      <View className="gap-4 px-5 pb-3 pt-4">
         <View className="gap-1">
           {/* No city yet: the group picks one on /plan/destinations. */}
           <Title>Planning the {brief.sourceChat.name} trip</Title>
-          <Muted>
-            {brief.dates.label} · {brief.members.length} people
-          </Muted>
+          <View className="flex-row items-center gap-3">
+            <Muted numeric className="flex-1">
+              {brief.dates.label} · {brief.members.length} people
+            </Muted>
+            <AvatarStack members={brief.members} size="sm" max={5} />
+          </View>
         </View>
 
-        <View className="gap-2 pt-2">
+        <View className="gap-2">
           <ProgressBar value={total === 0 ? 1 : ended / total} />
-          <Text accessibilityLiveRegion="polite" className="font-body-semibold text-xs text-faint">
-            {ended} of {total} steps
-          </Text>
+          <View className="h-4 flex-row items-center gap-2">
+            {ready ? null : <LiveDot />}
+            <Caption
+              numeric
+              accessibilityLiveRegion="polite"
+              className={ready ? "text-muted" : "font-body-semibold text-accent"}
+            >
+              {ready ? `${ended} of ${total} steps done` : `Working · ${ended} of ${total}`}
+            </Caption>
+          </View>
         </View>
       </View>
 
-      <ScrollView
-        ref={scroll}
-        className="flex-1"
-        contentContainerClassName="px-5 pb-6"
-        onContentSizeChange={() => scroll.current?.scrollToEnd({ animated: true })}
-      >
-        {visible.map((step, i) => (
-          <StepRow key={step.id} step={step} status={status(i)} />
-        ))}
-        {ready ? (
-          <ReadyRow
-            title={`${destinationSuggestions.length} destination ideas`}
-            summary={summary}
-            animate={!instant}
-          />
-        ) : null}
-      </ScrollView>
+      <View className="flex-1">
+        <ScrollView
+          ref={scroll}
+          className="flex-1"
+          contentContainerClassName="px-5 pb-6 pt-4"
+          onContentSizeChange={() => scroll.current?.scrollToEnd({ animated: true })}
+        >
+          {visible.map((step, i) => (
+            <StepRow key={step.id} step={step} status={status(i)} />
+          ))}
+          {ready ? (
+            <ReadyRow
+              title={`${destinationSuggestions.length} destination ideas`}
+              summary={summary}
+              animate={!instant}
+            />
+          ) : null}
+        </ScrollView>
+        {/* Rows scroll under the header through a short fade instead of a hard cut. */}
+        <LinearGradient
+          pointerEvents="none"
+          colors={[colors.bg, `${colors.bg}00`]}
+          style={{ position: "absolute", top: 0, left: 0, right: 0, height: 24 }}
+        />
+      </View>
     </Screen>
   );
 }

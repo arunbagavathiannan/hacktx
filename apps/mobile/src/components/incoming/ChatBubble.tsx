@@ -1,6 +1,6 @@
 import { Text, View } from "react-native";
 import Animated from "react-native-reanimated";
-import { Avatar } from "@/components/ui";
+import { Avatar, Caption } from "@/components/ui";
 import type { ChatMessage, Member } from "@/mocks/types";
 import { fadeIn } from "@/theme/motion";
 
@@ -23,13 +23,15 @@ export function ChatBubble({ message, sender }: { message: ChatMessage; sender: 
           <Avatar member={sender} size="sm" />
         </View>
         <View className="max-w-[78%] gap-1">
-          <Text className="ml-3 font-body-bold text-xs" style={{ color: sender.color }}>
+          <Text className="ml-3 font-body-semibold text-caption" style={{ color: sender.color }}>
             {sender.name}
           </Text>
           <View className="rounded-card rounded-bl-md border border-line bg-surface px-4 py-2.5">
-            <Text className="font-body text-base leading-6 text-ink">{message.text}</Text>
+            <Text className="font-body text-body text-ink">{message.text}</Text>
           </View>
-          <Text className="ml-3 font-body text-[11px] text-faint">{clockTime(message.at)}</Text>
+          <Caption numeric className="ml-3">
+            {clockTime(message.at)}
+          </Caption>
         </View>
       </View>
     </Animated.View>
