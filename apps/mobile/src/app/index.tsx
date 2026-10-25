@@ -13,14 +13,12 @@ import {
   Title,
 } from "@/components/ui";
 import { trip } from "@/mocks";
-import { usePreferences, usePreferencesHydrated } from "@/store/preferences";
+import { usePreferences } from "@/store/preferences";
 import { colors } from "@/theme";
 
 // Home: the user's plans. In the demo, the plan starts from the popup (/plan/incoming).
 export default function Home() {
-  const hydrated = usePreferencesHydrated();
   const onboarded = usePreferences((s) => s.onboarded);
-  if (!hydrated) return <View className="flex-1 bg-bg" />;
   if (!onboarded) return <Redirect href="/onboarding" />;
 
   return (
