@@ -18,6 +18,8 @@ const EVENT_TIME_RE =
 
 export type Item =
   | { kind: "flight"; id: string; flight: Flight; perPerson: number }
+  // The trip home on the last day. Its cost is in the round-trip fare (or the drive estimate).
+  | { kind: "return"; id: string; flight: Flight; perPerson: 0 }
   | { kind: "place"; id: string; place: Place; perPerson: number; estimate: boolean }
   // An extra hotel night before the trip starts (early flight). Its cost is in the stay.
   | { kind: "checkin"; id: string; place: Place; perPerson: 0 };
@@ -166,6 +168,10 @@ export function buildItinerary(
     const day = flightDay(flight, days, start);
     extraNights = Math.max(0, -day.offset);
     push(day, { kind: "flight", id: flight.id, flight, perPerson: flight.pricePerPerson });
+    const lastDay = days[days.length - 1];
+    if (lastDay && lastDay.offset !== day.offset) {
+      push(lastDay, { kind: "return", id: `${flight.id}-return`, flight, perPerson: 0 });
+    }
     if (hotel && extraNights > 0) {
       push(day, { kind: "checkin", id: `checkin-${hotel.id}`, place: hotel, perPerson: 0 });
     }
@@ -200,8 +206,12 @@ export function buildItinerary(
 
   const sorted = [...groups.entries()].sort(([a], [b]) => a - b).map(([, d]) => d);
   for (const day of sorted) {
-    // Flights first, then the order the user picked things.
-    day.items.sort((a, b) => Number(b.kind === "flight") - Number(a.kind === "flight"));
+    // Flights first, then the order the user picked things; the trip home ends the day.
+    day.items.sort(
+      (a, b) =>
+        Number(b.kind === "flight") - Number(a.kind === "flight") ||
+        Number(a.kind === "return") - Number(b.kind === "return"),
+    );
   }
 
   const perPerson =

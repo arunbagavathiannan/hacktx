@@ -8,7 +8,7 @@ type State = Preferences & {
   reset: () => void;
 };
 
-const empty: Preferences = { vibes: [], budget: null, food: [], maxTravel: null };
+const empty: Preferences = { vibes: [], budget: null, food: [], maxTravel: null, home: null };
 
 // Onboarding answers, kept in memory only so onboarding shows on every app launch
 // (handy for demos). Huddle uses them to ask fewer questions later.

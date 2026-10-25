@@ -38,7 +38,7 @@ export async function shareCard(card: CardRef, text: string): Promise<ShareResul
     return res === "opened" ? "textFallback" : res;
   }
   try {
-    await Sharing.shareAsync(uri, { mimeType: "image/png", dialogTitle: "Send to ski bums" });
+    await Sharing.shareAsync(uri, { mimeType: "image/png", dialogTitle: "Send to hackers" });
     return "opened";
   } catch {
     return "failed";

@@ -8,6 +8,12 @@
     "scheme": "huddle",
     "userInterfaceStyle": "dark",
     "ios": {
+      "bundleIdentifier": "com.siddm.huddle",
+      "infoPlist": {
+        "NSLocalNetworkUsageDescription": "Huddle reads your group chat from Messages on your Mac.",
+        "NSAppTransportSecurity": { "NSAllowsArbitraryLoads": true, "NSAllowsLocalNetworking": true }
+      },
+      "appleTeamId": "KS83W77247",
       "icon": "./assets/expo.icon"
     },
     "android": {
@@ -35,7 +41,8 @@
         }
       ],
       "expo-asset",
-      "expo-sharing"
+      "expo-sharing",
+      "expo-audio"
     ],
     "experiments": {
       "typedRoutes": true,

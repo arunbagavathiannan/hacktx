@@ -3,6 +3,7 @@ import { Pressable, ScrollView, Text, View } from "react-native";
 import type { Flight, Member } from "@/mocks/types";
 import { colors } from "@/theme";
 import { sourceLabel } from "./categories";
+import { isGround, travelDetail, travelPrice } from "./travel";
 
 type Props = {
   flights: Flight[];
@@ -33,7 +34,7 @@ export function FlightsRow({
     <View className="gap-2" accessibilityRole="radiogroup" accessibilityLabel={`Flights ${route}`}>
       {showHeader ? (
         <Text numberOfLines={1} className="px-5 font-body-semibold text-small text-muted">
-          One flight, {route}
+          {flights.some(isGround) ? "Getting there" : "One flight"}, {route}
           <Text className="font-body text-caption text-faint">
             {"  "}
             {sourceLabel.serpapi_flights}
@@ -53,8 +54,8 @@ export function FlightsRow({
               key={f.id}
               accessibilityRole="radio"
               aria-checked={picked}
-              accessibilityLabel={`${f.airline} ${f.depart}, $${f.pricePerPerson}${
-                picked ? ", the group's flight" : ""
+              accessibilityLabel={`${f.airline}, ${travelDetail(f)}, ${travelPrice(f)}${
+                picked ? ", the group's pick" : ""
               }`}
               onPress={() => onPick(f.id)}
               className={`w-[228px] flex-row items-center gap-2.5 rounded-2xl border px-3 py-2.5 active:opacity-80 ${
@@ -72,7 +73,7 @@ export function FlightsRow({
                     {f.airline}
                   </Text>
                   <Text className="font-body-bold text-small text-ink" style={TABULAR}>
-                    ${f.pricePerPerson}
+                    {travelPrice(f)}
                   </Text>
                 </View>
                 <View className="flex-row items-center justify-between gap-2">
@@ -81,7 +82,7 @@ export function FlightsRow({
                     className="flex-1 font-body text-caption text-muted"
                     style={TABULAR}
                   >
-                    {f.depart} · {f.stops === 0 ? "Nonstop" : `${f.stops} stop`}
+                    {travelDetail(f)}
                   </Text>
                   <View className="flex-row items-center">
                     {pickers.slice(0, 3).map((m, i) => (

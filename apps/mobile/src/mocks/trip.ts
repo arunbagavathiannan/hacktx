@@ -25,7 +25,7 @@ export const chat: ChatMessage[] = [
   {
     id: "m1",
     app: "whatsapp",
-    chat: "ski bums",
+    chat: "hackers",
     from: "maya",
     text: "we NEED a trip before finals. weekend of nov 13?",
     at: "2026-10-24T19:02:00-05:00",
@@ -33,7 +33,7 @@ export const chat: ChatMessage[] = [
   {
     id: "m2",
     app: "whatsapp",
-    chat: "ski bums",
+    chat: "hackers",
     from: "sam",
     text: "somewhere with live music??",
     at: "2026-10-24T19:03:00-05:00",
@@ -41,7 +41,7 @@ export const chat: ChatMessage[] = [
   {
     id: "m3",
     app: "whatsapp",
-    chat: "ski bums",
+    chat: "hackers",
     from: "jordan",
     text: "im down if it's under like 400",
     at: "2026-10-24T19:04:00-05:00",
@@ -49,7 +49,7 @@ export const chat: ChatMessage[] = [
   {
     id: "m4",
     app: "whatsapp",
-    chat: "ski bums",
+    chat: "hackers",
     from: "priya",
     text: "only free fri-sun that weekend",
     at: "2026-10-24T19:05:00-05:00",
@@ -68,7 +68,7 @@ export const brief: TripBrief = {
   dates: { start: "2026-11-13", end: "2026-11-15", label: "Fri Nov 13 – Sun Nov 15" },
   budgetPerPerson: 400,
   members,
-  sourceChat: { app: "whatsapp", name: "ski bums" },
+  sourceChat: { app: "whatsapp", name: "hackers" },
 };
 
 // Denver, one of the three destination ideas (see mocks/destinations.ts).

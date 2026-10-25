@@ -1,6 +1,9 @@
 // Shared types for the planner agent's tools. Tool definitions use the OpenAI function-calling
 // shape, which Muse Spark accepts (see "Agent design" in CLAUDE.md).
 
+import type { ChatModel } from "../muse.ts";
+import type { Preferences } from "../preferences.ts";
+
 export type Category = "flight" | "hotel" | "restaurant" | "activity";
 
 export type PlanStatus = "planning" | "needs_input" | "voting" | "ready" | "booked" | "failed";
@@ -18,11 +21,27 @@ export interface Place {
   lng?: number;
 }
 
+// A real way to book one option, from SerpAPI (Google Flights booking options or Google
+// Hotels property prices). Huddle links out; it never takes payment.
+export interface BookingOffer {
+  ref: string;
+  seller: string;
+  // Per person for flights, the whole stay for one room for hotels.
+  priceCents: number;
+  url?: string;
+  phone?: string;
+  official?: boolean;
+  // Google Flights hands off with a POST (open it as a form submit).
+  bookingRequest?: { url: string; post_data: string };
+}
+
 export interface Booking {
   confirmationCode: string;
   refs: string[];
   totalCents: number;
   createdAt: string;
+  // Cheapest live offer first, per option. Empty without SerpAPI.
+  offers: BookingOffer[];
 }
 
 // extract_trip output, stored in plans.trip.
@@ -36,7 +55,26 @@ export interface Trip {
   constraints: string[];
   // Things the chat didn't settle (e.g. "dates", "budget"). The agent asks about these.
   missing: string[];
+  // Budgets people gave for themselves ("im in if it's under 400" → { Jordan: 400 }).
+  budgets?: Record<string, number>;
+  // Each person's version of the plan, worked out after the plan is verified.
+  individuals?: IndividualPlan[];
   booking?: Booking;
+}
+
+// One person's take on the group plan: same hotel, but the way they get there can differ
+// when the group's pick doesn't fit their budget.
+export interface IndividualPlan {
+  name: string;
+  budgetUsd?: number;
+  travelRef?: string;
+  travel: string; // "Frontier · Nonstop", "Greyhound · Bus", "Drive"
+  travelUsd?: number; // per person; missing when the fare is only on the seller's site
+  hotelShareUsd: number;
+  totalUsd: number; // travel + hotel share
+  overBudgetUsd?: number;
+  // Why their travel differs from the group's, e.g. "Cheaper than the group's flight".
+  note?: string;
 }
 
 // A search result in one common shape, whatever API it came from. `ref` (e.g. "hotel_2") is
@@ -88,6 +126,8 @@ export interface PlanStore {
   listVotes(planId: string): Promise<Vote[]>;
   // Marks one option as the winner of its category and clears the others.
   selectOption(planId: string, category: Category, optionId: string): Promise<void>;
+  // Removes every option (and, with them, their votes) so a re-run starts clean.
+  clearOptions(planId: string): Promise<void>;
 }
 
 export interface ToolContext {
@@ -97,10 +137,19 @@ export interface ToolContext {
   chat: ChatMessage[];
   // The phone owner (the person who tapped the notification).
   userName: string;
+  // Everyone in the group chat. Each plan includes all of them, not just who has spoken.
+  members?: string[];
   // Search results from this run, by ref. pin_on_map saves picks from here.
   found: Map<string, Option>;
   // True only when the user tapped "Book" in the app. book refuses otherwise.
   bookingConfirmed: boolean;
+  // Muse Spark, when its key is set. extract_trip reads the chat with it; without it,
+  // extract_trip falls back to the demo trip.
+  model?: ChatModel;
+  // Where the group starts from when the chat doesn't say (flights need an origin).
+  home?: Place;
+  // The phone owner's onboarding answers. Searches default to them; the verifier checks them.
+  preferences?: Preferences;
 }
 
 export interface ToolResult {
@@ -125,6 +174,8 @@ export interface Tool<A = ToolArgs> {
   parameters: JsonSchema;
   // One line for agent_steps.input_summary ("Searching flights AUS → DEN").
   describe(args: A): string;
+  // Overrides runTool's default 8 s limit (book makes several SerpAPI calls).
+  timeoutMs?: number;
   run(args: A, ctx: ToolContext): Promise<ToolResult>;
 }
 

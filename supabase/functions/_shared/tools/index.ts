@@ -3,23 +3,21 @@
 
 import { askUser } from "./ask_user.ts";
 import { book } from "./book.ts";
-import { createPoll } from "./create_poll.ts";
 import { extractTrip } from "./extract_trip.ts";
 import { pinOnMap } from "./pin_on_map.ts";
 import { searchFlights } from "./search_flights.ts";
+import { searchGroundTransport } from "./search_ground_transport.ts";
 import { searchHotels } from "./search_hotels.ts";
 import { searchPlaces } from "./search_places.ts";
-import { tallyVotes } from "./tally_votes.ts";
 import { type ToolArgs, type ToolContext, ToolError, type ToolResult } from "./types.ts";
 
 export const tools = [
   extractTrip,
   searchFlights,
+  searchGroundTransport,
   searchHotels,
   searchPlaces,
   pinOnMap,
-  createPoll,
-  tallyVotes,
   askUser,
   book,
 ];
@@ -75,7 +73,7 @@ export async function runTool(name: string, rawArgs: string, ctx: ToolContext): 
     const result = await Promise.race([
       tool.run(args, ctx),
       new Promise<never>((_, reject) => {
-        timer = setTimeout(() => reject(new Error("timeout")), TIMEOUT_MS);
+        timer = setTimeout(() => reject(new Error("timeout")), tool.timeoutMs ?? TIMEOUT_MS);
       }),
     ]);
     return { ok: true, input, ...result };

@@ -1,16 +1,14 @@
 import { router, useFocusEffect, useLocalSearchParams } from "expo-router";
 import { ArrowLeft, ArrowRight, Check } from "phosphor-react-native";
 import { useCallback, useState } from "react";
-import { BackHandler, Platform, Pressable, Text, View } from "react-native";
+import { BackHandler, Platform, Pressable, Text, TextInput, View } from "react-native";
 import Animated from "react-native-reanimated";
-import { ChoiceCard } from "@/components/onboarding/ChoiceCard";
 import {
-  budgetOptions,
+  cityOptions,
   foodOptions,
   NO_RESTRICTIONS,
   steps,
   toggle,
-  travelOptions,
   vibeOptions,
 } from "@/components/onboarding/options";
 import { ProgressBar } from "@/components/onboarding/ProgressBar";
@@ -22,13 +20,13 @@ import { nudgeIn } from "@/theme/motion";
 const last = steps.length - 1;
 const stepKeys = steps.map((s) => s.key);
 
-// `?step=1..4` opens a given question directly (used for PR screenshots).
+// `?step=1..N` opens a given question directly (used for PR screenshots).
 function initialStep(param: string | undefined) {
   const n = Number(param);
   return Number.isInteger(n) && n >= 1 && n <= steps.length ? n - 1 : 0;
 }
 
-// Four quick questions, one per page. Answers save to usePreferences as you tap,
+// Three quick questions, one per page. Answers save to usePreferences as you tap,
 // so Huddle can skip questions later (see /plan/summary).
 export default function Onboarding() {
   const params = useLocalSearchParams<{ step?: string; edit?: string }>();
@@ -37,14 +35,18 @@ export default function Onboarding() {
   const [step, setStep] = useState(() => initialStep(params.step));
   const [direction, setDirection] = useState<1 | -1>(1);
 
+  const home = usePreferences((s) => s.home) ?? "";
   const vibes = usePreferences((s) => s.vibes);
-  const budget = usePreferences((s) => s.budget);
   const food = usePreferences((s) => s.food);
-  const maxTravel = usePreferences((s) => s.maxTravel);
   const setPrefs = usePreferences((s) => s.set);
   const finishOnboarding = usePreferences((s) => s.finishOnboarding);
 
-  const answered = [vibes.length > 0, budget !== null, food.length > 0, maxTravel !== null][step];
+  const { key, title, subtitle } = steps[step];
+  const answered = {
+    home: home.trim().length > 0,
+    vibes: vibes.length > 0,
+    food: food.length > 0,
+  }[key];
 
   const finish = () => {
     finishOnboarding();
@@ -71,7 +73,6 @@ export default function Onboarding() {
     }, [step]),
   );
 
-  const { title, subtitle } = steps[step];
   // The page slides in (8px) from the side you are heading to.
   const entering = nudgeIn(direction === 1 ? "right" : "left");
 
@@ -119,13 +120,40 @@ export default function Onboarding() {
 
       <Animated.View key={step} entering={entering} style={{ flex: 1 }}>
         <View className="flex-1 gap-8 pt-6">
-          {/* The progress bar already says which question this is, so no "1 of 4" above it. */}
+          {/* The progress bar already says which question this is, so no "1 of 2" above it. */}
           <View className="gap-2">
             <Display accessibilityRole="header">{title}</Display>
             <Body className="text-muted">{subtitle}</Body>
           </View>
 
-          {step === 0 ? (
+          {key === "home" ? (
+            <View className="gap-4">
+              <TextInput
+                value={home}
+                onChangeText={(text) => setPrefs({ home: text })}
+                placeholder="Your city"
+                placeholderTextColor={colors.faint}
+                autoCapitalize="words"
+                autoCorrect={false}
+                returnKeyType="next"
+                onSubmitEditing={() => home.trim() && go(step + 1)}
+                accessibilityLabel="Your city"
+                className="min-h-14 rounded-card bg-surface px-4 font-body text-body text-ink"
+              />
+              <View className="flex-row flex-wrap gap-x-2 gap-y-3">
+                {cityOptions.map((city) => (
+                  <Chip
+                    key={city}
+                    label={city}
+                    selected={home === city}
+                    onPress={() => setPrefs({ home: city })}
+                  />
+                ))}
+              </View>
+            </View>
+          ) : null}
+
+          {key === "vibes" ? (
             <View className="flex-row flex-wrap gap-x-2 gap-y-3">
               {vibeOptions.map(({ label }) => (
                 <Chip
@@ -138,22 +166,7 @@ export default function Onboarding() {
             </View>
           ) : null}
 
-          {step === 1 ? (
-            <View accessibilityRole="radiogroup" accessibilityLabel={title} className="gap-3">
-              {budgetOptions.map((o) => (
-                <ChoiceCard
-                  key={o.label}
-                  label={o.label}
-                  title={o.title}
-                  description={o.description}
-                  selected={budget === o.label}
-                  onPress={() => setPrefs({ budget: o.label })}
-                />
-              ))}
-            </View>
-          ) : null}
-
-          {step === 2 ? (
+          {key === "food" ? (
             <View className="flex-row flex-wrap gap-x-2 gap-y-3">
               {foodOptions.map(({ label }) => (
                 <Chip
@@ -161,20 +174,6 @@ export default function Onboarding() {
                   label={label}
                   selected={food.includes(label)}
                   onPress={() => setPrefs({ food: toggle(food, label, NO_RESTRICTIONS) })}
-                />
-              ))}
-            </View>
-          ) : null}
-
-          {step === 3 ? (
-            <View accessibilityRole="radiogroup" accessibilityLabel={title} className="gap-3">
-              {travelOptions.map((o) => (
-                <ChoiceCard
-                  key={o.label}
-                  label={o.label}
-                  description={o.description}
-                  selected={maxTravel === o.label}
-                  onPress={() => setPrefs({ maxTravel: o.label })}
                 />
               ))}
             </View>

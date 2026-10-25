@@ -445,13 +445,23 @@ export const leadingDestination: DestinationSuggestion = destinationSuggestions.
 
 // MOCK: demo-only. Screens after the pick (map, booked) opened by a direct link, before the
 // group picked anything, show the leading idea instead of an empty plan.
+// Live mode (lib/live.ts): the real plan's destination, found by its id like any other.
+let liveDestination: DestinationSuggestion | null = null;
+export function setLiveDestination(d: DestinationSuggestion | null) {
+  liveDestination = d;
+}
+
 export function destinationById(id: string | null | undefined): DestinationSuggestion {
+  if (liveDestination && id === liveDestination.id) return liveDestination;
   return destinationSuggestions.find((d) => d.id === id) ?? leadingDestination;
 }
 
 // The destination a flight or place belongs to (ids are unique across cities).
 export function destinationOwning(optionId: string): DestinationSuggestion | undefined {
-  return destinationSuggestions.find(
+  const all = liveDestination
+    ? [liveDestination, ...destinationSuggestions]
+    : destinationSuggestions;
+  return all.find(
     (d) => d.flights.some((f) => f.id === optionId) || d.places.some((p) => p.id === optionId),
   );
 }

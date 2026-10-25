@@ -1,4 +1,5 @@
-import type { ChatModel } from "../_shared/muse.ts";
+import { type ChatModel, parseJsonReply } from "../_shared/muse.ts";
+import { nightlyCapUsd, type Preferences, wantsNonstop } from "../_shared/preferences.ts";
 import type { ChatMessage, StoredOption, Trip } from "../_shared/tools/types.ts";
 
 // The verifier checks the plan before anyone sees it (see "Agent design" in CLAUDE.md).
@@ -8,6 +9,8 @@ import type { ChatMessage, StoredOption, Trip } from "../_shared/tools/types.ts"
 export interface Verdict {
   ok: boolean;
   issues: string[];
+  // Shown to the group but never block the plan: going over budget is the group's call.
+  warnings: string[];
   checked: number;
   perPersonUsd?: number;
 }
@@ -23,7 +26,38 @@ export function perPersonCents(options: StoredOption[]) {
   return pick("flight") + Math.round(pick("hotel") / 2);
 }
 
-export function codeChecks(trip: Trip, options: StoredOption[]): string[] {
+// Budget checks: the trip's per-person budget and the owner's budget tier. These are
+// warnings, not issues. An over-budget plan still goes ahead, with the overage spelled out.
+export function budgetWarnings(trip: Trip, options: StoredOption[], prefs?: Preferences): string[] {
+  const warnings: string[] = [];
+  if (trip.budgetPerPersonUsd !== undefined && options.length > 0) {
+    const each = Math.round(perPersonCents(options) / 100);
+    if (each > trip.budgetPerPersonUsd) {
+      warnings.push(
+        `About $${each} each, $${each - trip.budgetPerPersonUsd} over the $${trip.budgetPerPersonUsd} budget.`,
+      );
+    }
+  }
+
+  // The owner's budget tier: the chosen hotel (or, before a vote, at least one option)
+  // should fit the nightly cap.
+  const cap = nightlyCapUsd(prefs);
+  const hotels = options.filter((o) => o.category === "hotel");
+  const perNight = (o: StoredOption) => Number(o.details.rate_per_night ?? 0);
+  if (cap !== undefined && hotels.length) {
+    const chosen = hotels.find((o) => o.isSelected);
+    if (chosen && perNight(chosen) > cap) {
+      warnings.push(
+        `${chosen.title} is $${perNight(chosen)}/night, over the ${prefs?.budget} budget (~$${cap}).`,
+      );
+    } else if (!chosen && hotels.every((o) => perNight(o) > cap)) {
+      warnings.push(`Every hotel is over the ${prefs?.budget} budget (~$${cap}/night).`);
+    }
+  }
+  return warnings;
+}
+
+export function codeChecks(trip: Trip, options: StoredOption[], prefs?: Preferences): string[] {
   const issues: string[] = [];
 
   if (options.length === 0) issues.push("Nothing is pinned to the plan yet.");
@@ -38,7 +72,7 @@ export function codeChecks(trip: Trip, options: StoredOption[]): string[] {
         `${o.title}: shows $${(o.priceCents ?? 0) / 100} but the search said $${source}.`,
       );
     }
-    if (!o.url?.startsWith("https://")) issues.push(`${o.title} has no working link.`);
+    if (!/^https?:\/\//.test(o.url ?? "")) issues.push(`${o.title} has no working link.`);
 
     // Dates must match the trip from the chat.
     const [from, to] =
@@ -54,21 +88,56 @@ export function codeChecks(trip: Trip, options: StoredOption[]): string[] {
     }
   }
 
-  if (trip.budgetPerPersonUsd !== undefined && options.length > 0) {
-    const each = perPersonCents(options) / 100;
-    if (each > trip.budgetPerPersonUsd) {
-      issues.push(`About $${Math.round(each)} each, over the $${trip.budgetPerPersonUsd} budget.`);
+  // "Short flight" means nonstop.
+  if (wantsNonstop(prefs)) {
+    for (const o of options.filter((x) => x.category === "flight" && Number(x.details.stops) > 0)) {
+      issues.push(`${o.title} has a stop, but the owner wants short nonstop flights.`);
     }
   }
 
   return issues;
 }
 
+export const VERIFIER_TIMEOUT_MS = 35_000;
+
+// The raw search fields the verifier compares against (prices, dates, stops, ratings, food).
+// Descriptions, amenities, tokens and the like stay out of the prompt.
+const CHECKED_DETAILS = [
+  "source",
+  "price",
+  "stops",
+  "outbound_date",
+  "return_date",
+  "departure_time",
+  "total_duration",
+  "rate_per_night",
+  "total_rate",
+  "check_in_date",
+  "check_out_date",
+  "overall_rating",
+  "rating",
+  "type",
+  "address",
+  "dietary",
+];
+
+function pick(details: Record<string, unknown>, keys: string[]) {
+  return Object.fromEntries(
+    keys.filter((k) => details[k] !== undefined).map((k) => [k, details[k]]),
+  );
+}
+
 const SYSTEM = `You are Huddle's verifier. Check a group trip plan before the group sees it.
 Using the chat, the extracted trip and the pinned options, look for: prices or links that
 don't match the search results in "details", dates or people that don't match the chat,
-a plan over budget, and constraints from the chat that were ignored. "code_issues" lists
-problems already found by exact checks. Reply with JSON only:
+constraints from the chat that were ignored, and options that clash
+with "preferences" (the owner's onboarding answers: food restrictions are hard rules, so flag
+any restaurant that doesn't work for them; vibe, budget and travel are strong leanings). "owner" is the phone
+owner: they are in the group even though none of their messages are in the chat (Huddle
+reads other people's messages from notifications, so the owner's own messages never appear).
+Don't flag the owner as missing from the chat. Being over budget is NOT an issue: the plan
+goes ahead and the group sees a budget warning, so leave budget out of "issues". "code_issues" lists problems already found
+by exact checks. Reply with JSON only:
 {"ok": boolean, "issues": ["short, specific problem", ...]}`;
 
 export async function verify(
@@ -76,12 +145,19 @@ export async function verify(
   chat: ChatMessage[],
   trip: Trip,
   options: StoredOption[],
+  owner: string,
+  prefs?: Preferences,
 ): Promise<Verdict> {
-  const issues = codeChecks(trip, options);
+  const issues = codeChecks(trip, options, prefs);
+  const warnings = budgetWarnings(trip, options, prefs);
 
+  // Only what the checks need: a smaller prompt is a faster (and cheaper) Muse Spark call.
+  const { booking: _booking, ...tripFacts } = trip;
   const snapshot = {
+    owner,
+    preferences: prefs ?? null,
     chat: chat.map((m) => `${m.sender}: ${m.text}`),
-    trip,
+    trip: tripFacts,
     options: options.map(({ ref, category, title, priceCents, url, isSelected, details }) => ({
       ref,
       category,
@@ -89,7 +165,7 @@ export async function verify(
       price_usd: priceCents === undefined ? undefined : priceCents / 100,
       url,
       selected: isSelected,
-      details,
+      details: pick(details, CHECKED_DETAILS),
     })),
     code_issues: issues,
   };
@@ -100,11 +176,16 @@ export async function verify(
         { role: "system", content: SYSTEM },
         { role: "user", content: JSON.stringify(snapshot) },
       ],
-      json: true,
+      // Reading a whole plan takes longer than a normal call (20 s timed out live).
+      timeoutMs: VERIFIER_TIMEOUT_MS,
     });
-    const parsed = JSON.parse(reply.content ?? "{}");
+    const parsed = parseJsonReply(reply.content) ?? {};
     for (const issue of Array.isArray(parsed.issues) ? parsed.issues : []) {
-      if (typeof issue === "string" && !issues.includes(issue)) issues.push(issue);
+      if (typeof issue !== "string" || issues.includes(issue)) continue;
+      // If the model still raises the budget, it's a warning like the code check's.
+      if (/budget|over \$|exceed/i.test(issue)) {
+        if (!warnings.length) warnings.push(issue);
+      } else issues.push(issue);
     }
   } catch (err) {
     // The model pass is extra; the code checks still stand if it fails.
@@ -114,6 +195,7 @@ export async function verify(
   return {
     ok: issues.length === 0,
     issues,
+    warnings,
     checked: options.length,
     perPersonUsd: options.length ? Math.round(perPersonCents(options) / 100) : undefined,
   };

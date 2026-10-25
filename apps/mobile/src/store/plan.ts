@@ -57,6 +57,29 @@ const byVotes = (a: { pickedBy: string[] }, b: { pickedBy: string[] }) =>
 // flight and its headline show/spot, plus the best hotel for this group size within budget
 // (see bestHotel).
 export function defaultPicksFor(dest: DestinationSuggestion) {
+  const defaults = ruleBasedPicks(dest);
+  // Live plans start from the agent's own choice in each category (lib/live.ts). A category the
+  // agent didn't choose in (e.g. an older plan) keeps the default, so no part goes missing.
+  const chosenFlights = dest.flights.filter((f) => f.chosen).map((f) => f.id);
+  const chosenPlaces = dest.places.filter((p) => p.chosen);
+  if (chosenFlights.length === 0 && chosenPlaces.length === 0) return defaults;
+  const categoryOf = (id: string) =>
+    dest.flights.some((f) => f.id === id)
+      ? "flight"
+      : dest.places.find((p) => p.id === id)?.category;
+  const covered = new Set([
+    ...(chosenFlights.length ? ["flight"] : []),
+    ...chosenPlaces.map((p) => p.category),
+  ]);
+  return [
+    ...chosenFlights,
+    ...chosenPlaces.map((p) => p.id),
+    ...defaults.filter((id) => !covered.has(categoryOf(id) ?? "")),
+  ];
+}
+
+// The mock demo's picks: the most-voted flight, the headline show, the best-fit hotel.
+function ruleBasedPicks(dest: DestinationSuggestion) {
   const { trip } = dest;
   const flight = [...dest.flights].sort(byVotes)[0];
   const show = dest.places.find((p) => p.id === dest.headlinePlaceId);

@@ -151,7 +151,10 @@ function MapScreen() {
 
   // The shared estimate (store/plan planPerPerson): places and hotel, plus each leg's flight
   // or gas. The destination cards, summary and home card show the same number.
-  const placePicks = picks.filter((id) => !ALL_FLIGHT_IDS.has(id));
+  // Live plans (lib/live.ts) bring their own flight ids.
+  const placePicks = picks.filter(
+    (id) => !ALL_FLIGHT_IDS.has(id) && !tripFlights.some((f) => f.id === id),
+  );
   const people = groupSize(activeTrip);
   const perPerson = planPerPerson(
     { trip: activeTrip, flights: tripFlights, places },

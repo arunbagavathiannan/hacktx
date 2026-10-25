@@ -96,7 +96,7 @@ export default function UiGallery() {
 
       <Label>Badges</Label>
       <View className="flex-row gap-2">
-        <Badge label="Spotted in ski bums" tone="accent" />
+        <Badge label="Spotted in hackers" tone="accent" />
         <Badge label="Fits budget" tone="good" />
         <Badge label="3 picks" />
         <Badge label="$40 over budget" tone="accent" variant="accent" />

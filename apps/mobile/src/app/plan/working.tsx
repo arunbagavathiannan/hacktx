@@ -1,7 +1,7 @@
 import { LinearGradient } from "expo-linear-gradient";
 import { router, useLocalSearchParams } from "expo-router";
 import { ArrowRight, ShieldCheck } from "phosphor-react-native";
-import { useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { ScrollView, type ScrollViewInstance, View } from "react-native";
 import Animated, { useReducedMotion } from "react-native-reanimated";
 import { destinationSteps } from "@/components/timeline/destinationSteps";
@@ -9,8 +9,10 @@ import { LiveDot, ProgressBar } from "@/components/timeline/ProgressBar";
 import { ReadyRow, StepRow } from "@/components/timeline/StepRow";
 import { type PlaybackStep, useStepPlayback } from "@/components/timeline/useStepPlayback";
 import { AvatarStack, Button, Caption, Muted, Screen, Title } from "@/components/ui";
+import { LIVE, toPlaybackStep } from "@/lib/live";
 import { brief } from "@/mocks";
 import { destinationSuggestions } from "@/mocks/destinations";
+import { useLive } from "@/store/live";
 import { usePreferences } from "@/store/preferences";
 import { colors } from "@/theme";
 import { fadeIn } from "@/theme/motion";
@@ -29,6 +31,113 @@ const withFallback = (steps: PlaybackStep[]): PlaybackStep[] =>
 // succeeding, until the agent_steps Realtime feed exists. Dev: ?demo=done shows the finished
 // timeline, ?demo=fallback the same with a failed tool.
 export default function Working() {
+  const { plan } = useLocalSearchParams<{ plan?: string }>();
+  return LIVE && plan ? <LiveWorking planId={plan} /> : <MockWorking />;
+}
+
+// Live mode (lib/live.ts): the same timeline, one row per real agent_steps row as it streams
+// in over Supabase Realtime. It ends on the plan (map), a question, or an error.
+function LiveWorking({ planId }: { planId: string }) {
+  useEffect(() => useLive.getState().watch(planId), [planId]);
+  // Huddle needs the group to decide something (where to go, the budget): it asked in the
+  // chat, so go back there and let them talk it over.
+  const backToChat = () => (router.canGoBack() ? router.back() : router.replace("/plan/incoming"));
+  const rows = useLive((s) => s.steps);
+  const phase = useLive((s) => s.phase);
+  const error = useLive((s) => s.error);
+  // biome-ignore lint/correctness/useExhaustiveDependencies: return once, when Huddle asks
+  useEffect(() => {
+    if (phase === "needs_input") backToChat();
+  }, [phase]);
+  const steps = useMemo(() => rows.map(toPlaybackStep), [rows]);
+  const scroll = useRef<ScrollViewInstance>(null);
+
+  const ended = rows.filter((r) => r.status !== "running").length;
+  const done = phase === "ready" || phase === "needs_input" || phase === "failed";
+  // A full run is about 10 steps; the bar fills as they finish and completes at the end.
+  const progress = done ? 1 : ended / Math.max(rows.length + 1, 10);
+  const trip = rows.find((r) => r.tool === "extract_trip" && r.status === "done")?.result_summary;
+  const verified = [...rows].reverse().find((r) => r.tool === "verify" && r.status === "done");
+
+  return (
+    <Screen
+      className="gap-0 px-0 pt-0"
+      footer={
+        phase === "ready" ? (
+          <Animated.View entering={fadeIn()}>
+            <Button
+              label="See the plan"
+              onPress={() => router.push("/plan/map")}
+              icon={<ArrowRight size={20} color={colors.bg} />}
+            />
+          </Animated.View>
+        ) : phase === "needs_input" ? (
+          <View className="gap-3">
+            <Muted className="text-center">Huddle asked the group in the chat.</Muted>
+            <Button label="Back to the chat" onPress={backToChat} />
+          </View>
+        ) : phase === "failed" ? (
+          <View className="gap-3">
+            <Muted className="text-center">{error ?? "Huddle hit a snag."}</Muted>
+            <Button label="Back to the chat" onPress={() => router.back()} />
+          </View>
+        ) : (
+          <View className="h-14 flex-row items-center justify-center gap-2">
+            <ShieldCheck size={18} color={colors.faint} />
+            <Muted className="text-faint">Huddle checks every price before you see it</Muted>
+          </View>
+        )
+      }
+    >
+      <View className="gap-4 px-5 pb-3 pt-4">
+        <View className="gap-1">
+          <Title>Planning the {brief.sourceChat.name} trip</Title>
+          <Muted numeric>{trip ?? "Reading the chat…"}</Muted>
+        </View>
+        <View className="gap-2">
+          <ProgressBar value={progress} />
+          <View className="h-4 flex-row items-center gap-2">
+            {done ? null : <LiveDot />}
+            <Caption
+              numeric
+              accessibilityLiveRegion="polite"
+              className={done ? "text-muted" : "font-body-semibold text-accent"}
+            >
+              {done ? `${ended} steps done` : `Working · ${ended} done`}
+            </Caption>
+          </View>
+        </View>
+      </View>
+
+      <View className="flex-1">
+        <ScrollView
+          ref={scroll}
+          className="flex-1"
+          contentContainerClassName="px-5 pb-6 pt-4"
+          onContentSizeChange={() => scroll.current?.scrollToEnd({ animated: true })}
+        >
+          {steps.map((step, i) => (
+            <StepRow
+              key={step.id}
+              step={step}
+              status={rows[i]?.status === "running" ? "running" : (step.outcome ?? "done")}
+            />
+          ))}
+          {phase === "ready" ? (
+            <ReadyRow summary={verified?.result_summary ?? "Checked against the sources"} animate />
+          ) : null}
+        </ScrollView>
+        <LinearGradient
+          pointerEvents="none"
+          colors={[colors.bg, `${colors.bg}00`]}
+          style={{ position: "absolute", top: 0, left: 0, right: 0, height: 24 }}
+        />
+      </View>
+    </Screen>
+  );
+}
+
+function MockWorking() {
   const { demo } = useLocalSearchParams<{ demo?: string }>();
   const reduceMotion = useReducedMotion();
   const instant = demo === "done" || demo === "fallback" || reduceMotion;

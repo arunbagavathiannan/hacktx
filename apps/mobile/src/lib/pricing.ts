@@ -88,3 +88,15 @@ export function estimatePerPerson(
     others.reduce((sum, p) => sum + placePerPerson(p).amount, 0);
   return Math.round(total);
 }
+
+// Each person's share of a booking offer. Hotel offers are the whole stay for one room, so
+// they're split the same way as the stay itself (rooms by group size, then per person).
+export function offerEach(
+  offer: { priceUsd: number; category?: string },
+  trip: Trip,
+  sleepsPerRoom = 2,
+) {
+  if (offer.category !== "hotel") return offer.priceUsd;
+  const people = groupSize(trip);
+  return Math.round((offer.priceUsd * roomsNeeded(people, sleepsPerRoom)) / people);
+}

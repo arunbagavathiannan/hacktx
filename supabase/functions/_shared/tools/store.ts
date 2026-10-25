@@ -130,6 +130,12 @@ export function supabaseStore(db: SupabaseClient): PlanStore {
       return (data ?? []).map((v) => ({ optionId: v.option_id, voterName: v.voter_name }));
     },
 
+    async clearOptions(planId) {
+      // votes.option_id cascades, so the old votes go with their options.
+      const { error } = await db.from("plan_options").delete().eq("plan_id", planId);
+      check(error);
+    },
+
     async selectOption(planId, category, optionId) {
       const cleared = await db
         .from("plan_options")
@@ -171,6 +177,10 @@ export function memoryStore(plan: Plan): PlanStore & { options: StoredOption[]; 
       }
     },
     listVotes: async () => [...votes],
+    clearOptions: async () => {
+      options.length = 0;
+      votes.length = 0;
+    },
     selectOption: async (_planId, category, optionId) => {
       for (const o of options) {
         if (o.category === category) o.isSelected = o.id === optionId;

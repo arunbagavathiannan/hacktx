@@ -8,22 +8,18 @@ import {
 } from "phosphor-react-native";
 import { useState } from "react";
 import { Pressable, View } from "react-native";
-import { budgetOptions } from "@/components/onboarding/options";
 import { ResetConfirm } from "@/components/settings/ResetDemo";
 import { SettingRow } from "@/components/settings/SettingRow";
 import { demoPrefs } from "@/components/summary/personalize";
 import { Button, IconButton, Label, Muted, Screen, Title } from "@/components/ui";
+import { setLiveDestination } from "@/mocks/destinations";
 import type { Preferences } from "@/mocks/types";
+import { useLive } from "@/store/live";
 import { usePlan } from "@/store/plan";
 import { usePreferences } from "@/store/preferences";
 import { colors, icon } from "@/theme";
 
 const NOT_SET = "Not set";
-
-function budgetLabel(budget: Preferences["budget"]) {
-  const option = budgetOptions.find((o) => o.label === budget);
-  return option ? `${option.label} · ${option.title}` : NOT_SET;
-}
 
 // From NEXT_STEPS.md "Already in the MVP".
 const privacy = [
@@ -52,6 +48,8 @@ export default function Settings() {
   const resetDemo = () => {
     usePlan.getState().reset();
     usePreferences.getState().reset();
+    useLive.getState().reset();
+    setLiveDestination(null);
     // Drop Home and Settings from the stack so onboarding is the only screen, like a fresh install.
     if (router.canDismiss()) router.dismissAll();
     router.replace("/onboarding");
@@ -59,9 +57,7 @@ export default function Settings() {
 
   const rows = [
     { label: "Vibe", value: prefs.vibes.join(", ") },
-    { label: "Budget", value: prefs.budget ? budgetLabel(prefs.budget) : "" },
     { label: "Food", value: prefs.food.join(", ") },
-    { label: "Travel range", value: prefs.maxTravel ?? "" },
   ];
 
   return (

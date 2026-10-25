@@ -19,13 +19,11 @@ export const demoScript: [string, Record<string, unknown>][] = [
       refs: ["flight_1", "flight_2", "hotel_1", "hotel_2", "hotel_3", "activity_1", "restaurant_1"],
     },
   ],
-  ["create_poll", { category: "hotel", question: "Where should we stay?" }],
-  ["tally_votes", { category: "hotel" }],
 ];
 
 const finalMessage =
-  "Denver, Nov 20–22: nonstop Frontier flights at $164 round trip, the hotel the group voted " +
-  "for, Red Rocks on Saturday and dinner at Tavernetta. Tap Book when everyone's in.";
+  "Denver, Nov 20–22: nonstop Frontier flights at $164 round trip, three hotels to pick from, " +
+  "Red Rocks on Saturday and dinner at Tavernetta. Tap Book when everyone's in.";
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 

@@ -111,4 +111,24 @@ export const serpapiHotelsDenver = {
   ],
 };
 
-export type SerpapiHotel = (typeof serpapiHotelsDenver)["properties"][number];
+// Fields the tool reads. Live results have more, and some may be missing.
+export interface SerpapiHotel {
+  type?: string;
+  name: string;
+  description?: string;
+  link?: string;
+  gps_coordinates?: { latitude: number; longitude: number };
+  rate_per_night?: { lowest?: string; extracted_lowest?: number };
+  total_rate?: { lowest?: string; extracted_lowest?: number };
+  extracted_hotel_class?: number;
+  overall_rating?: number;
+  reviews?: number;
+  amenities?: string[];
+  images?: { thumbnail?: string }[];
+  // Gets per-site prices and booking links (property details).
+  property_token?: string;
+}
+
+export interface HotelsResponse {
+  properties?: SerpapiHotel[];
+}
