@@ -1,6 +1,8 @@
 // Shared types for the planner agent's tools. Tool definitions use the OpenAI function-calling
 // shape, which Muse Spark accepts (see "Agent design" in CLAUDE.md).
 
+import type { ChatModel } from "../muse.ts";
+
 export type Category = "flight" | "hotel" | "restaurant" | "activity";
 
 export type PlanStatus = "planning" | "needs_input" | "voting" | "ready" | "booked" | "failed";
@@ -117,6 +119,11 @@ export interface ToolContext {
   found: Map<string, Option>;
   // True only when the user tapped "Book" in the app. book refuses otherwise.
   bookingConfirmed: boolean;
+  // Muse Spark, when its key is set. extract_trip reads the chat with it; without it,
+  // extract_trip falls back to the demo trip.
+  model?: ChatModel;
+  // Where the group starts from when the chat doesn't say (flights need an origin).
+  home?: Place;
 }
 
 export interface ToolResult {

@@ -3,6 +3,7 @@
 
 import { assert, assertEquals } from "jsr:@std/assert@1";
 import { demoChat } from "./mocks/demo-trip.ts";
+import { resetSerpapiBreaker } from "./serpapi.ts";
 import { runTool } from "./tools/index.ts";
 import { memoryStore } from "./tools/store.ts";
 import type { ToolContext } from "./tools/types.ts";
@@ -32,6 +33,7 @@ async function withSerpapi(
 ): Promise<URL[]> {
   const realFetch = globalThis.fetch;
   const urls: URL[] = [];
+  resetSerpapiBreaker();
   Deno.env.set("SERPAPI_API_KEY", "test-key");
   globalThis.fetch = (input: string | URL | Request) => {
     const url = new URL(input instanceof Request ? input.url : input);
@@ -287,6 +289,12 @@ Deno.test("book fetches live SerpAPI booking options and uses the cheapest selle
   assert(booked.ok, booked.summary);
   // search flights, search hotels, then: return flights, flight sellers, hotel prices
   assertEquals(urls.length, 5);
+  // The return-flight lookup sends the route along with the token.
+  const returns = urls.find((u) => u.searchParams.has("departure_token"));
+  assertEquals(
+    [returns?.searchParams.get("departure_id"), returns?.searchParams.get("arrival_id")],
+    ["AUS", "DEN"],
+  );
   const booking = (await c.store.getPlan("p")).trip.booking;
   const sellers = booking?.offers.map((o) => `${o.ref}:${o.seller}:${o.priceCents / 100}`);
   assertEquals(sellers, [
@@ -333,4 +341,134 @@ Deno.test("book still confirms when the booking lookups fail", async () => {
   assertEquals(booking?.offers, []);
   // Falls back to the searched prices.
   assertEquals(booking?.totalCents, (4 * 164 + 2 * 378) * 100);
+});
+
+Deno.test("search_places reads a single-place answer (place_results)", async () => {
+  const c = ctx();
+  let result = await runTool("search_places", "{}", c);
+  await withSerpapi(
+    () =>
+      Response.json({
+        place_results: {
+          title: "Red Rocks Park and Amphitheatre",
+          place_id: "ChIJredrocks",
+          gps_coordinates: { latitude: 39.6654, longitude: -105.2057 },
+          rating: 4.9,
+          type: "Amphitheater",
+        },
+      }),
+    async () => {
+      result = await runTool(
+        "search_places",
+        JSON.stringify({ kind: "activity", query: "Red Rocks", location: "Denver, CO" }),
+        c,
+      );
+    },
+  );
+
+  assert(result.ok, result.summary);
+  assertEquals(result.summary, "Found 1 activity");
+  assertEquals(c.found.get("activity_1")?.title, "Red Rocks Park and Amphitheatre");
+});
+
+Deno.test("booking offers: 5 cheapest, plus the official site if it's pricier", async () => {
+  const c = ctx();
+  await runTool("extract_trip", "{}", c);
+  let booked = await runTool("book", "{}", c);
+  const sellers = ["A", "B", "C", "D", "E", "F", "G"];
+  await withSerpapi(
+    (url) =>
+      url.searchParams.get("property_token") === "PROP_CATBIRD"
+        ? Response.json({
+            prices: [
+              ...sellers.map((s, i) => ({
+                source: `Site ${s}`,
+                link: `https://${s}.example`,
+                total_rate: { extracted_lowest: 300 + i * 10 },
+              })),
+              {
+                source: "Catbird",
+                official: true,
+                link: "https://catbird.example",
+                total_rate: { extracted_lowest: 450 },
+              },
+            ],
+          })
+        : fakeSerpapi(url),
+    async () => {
+      await runTool("search_hotels", JSON.stringify(denverStay), c);
+      await runTool("pin_on_map", JSON.stringify({ refs: ["hotel_1"] }), c);
+      c.bookingConfirmed = true;
+      booked = await runTool("book", JSON.stringify({ refs: ["hotel_1"] }), c);
+    },
+  );
+
+  assert(booked.ok, booked.summary);
+  const offers = (await c.store.getPlan("p")).trip.booking?.offers ?? [];
+  assertEquals(
+    offers.map((o) => o.seller),
+    ["Site A", "Site B", "Site C", "Site D", "Site E", "Catbird"],
+  );
+  assert(offers.at(-1)?.official);
+});
+
+Deno.test("circuit breaker: after a quota error, later searches skip the API", async () => {
+  const c = ctx();
+  const urls = await withSerpapi(
+    () => Response.json({ error: "Your account has run out of searches." }, { status: 429 }),
+    async () => {
+      for (const location of ["Paris", "Rome", "Lisbon"]) {
+        await runTool(
+          "search_hotels",
+          JSON.stringify({ location, check_in_date: "2026-11-20", check_out_date: "2026-11-22" }),
+          c,
+        );
+      }
+    },
+  );
+  // Only the first search reached SerpAPI.
+  assertEquals(urls.length, 1);
+});
+
+Deno.test("SerpAPI 'no results' is an empty answer, not an outage", async () => {
+  const c = ctx();
+  let first = await runTool("search_places", "{}", c);
+  const urls = await withSerpapi(
+    () => Response.json({ error: "Google hasn't returned any results for this query." }),
+    async () => {
+      first = await runTool(
+        "search_places",
+        JSON.stringify({ kind: "activity", query: "ice caves", location: "Paris" }),
+        c,
+      );
+      await runTool(
+        "search_places",
+        JSON.stringify({ kind: "restaurant", query: "crepes", location: "Paris" }),
+        c,
+      );
+    },
+  );
+  assert(first.ok, first.summary);
+  assertEquals(first.summary, "Found 0 activities");
+  assertEquals(urls.length, 2); // breaker stayed closed
+});
+
+Deno.test("booking twice doesn't look up offers again", async () => {
+  const c = ctx();
+  await runTool("extract_trip", "{}", c);
+  let again = await runTool("book", "{}", c);
+  let firstCode = "";
+  const urls = await withSerpapi(fakeSerpapi, async () => {
+    await runTool("search_hotels", JSON.stringify(denverStay), c);
+    await runTool("pin_on_map", JSON.stringify({ refs: ["hotel_1"] }), c);
+    c.bookingConfirmed = true;
+    await runTool("book", JSON.stringify({ refs: ["hotel_1"] }), c);
+    firstCode = (await c.store.getPlan("p")).trip.booking?.confirmationCode ?? "";
+    again = await runTool("book", JSON.stringify({ refs: ["hotel_1"] }), c);
+  });
+
+  assert(again.ok, again.summary);
+  assert(again.summary.startsWith(`Already confirmed ${firstCode}`));
+  // search + one hotel-prices lookup; the second tap made no calls.
+  assertEquals(urls.length, 2);
 });

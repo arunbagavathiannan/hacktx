@@ -6,7 +6,7 @@ import { demoChat } from "../_shared/mocks/demo-trip.ts";
 import { scriptedMuse } from "../_shared/mocks/muse-script.ts";
 import { memoryStore } from "../_shared/tools/store.ts";
 import type { Plan } from "../_shared/tools/types.ts";
-import { runAgent } from "./loop.ts";
+import { MAX_MODEL_CALLS, runAgent } from "./loop.ts";
 import { memorySteps } from "./steps.ts";
 
 function setup(script?: [string, Record<string, unknown>][]) {
@@ -76,15 +76,15 @@ Deno.test("demo run: 8 tool calls, verified, plan ready", async () => {
 });
 
 Deno.test("stops at 10 tool calls", async () => {
-  const flights = {
-    origin: "AUS",
-    destination: "DEN",
-    outbound_date: "2026-11-20",
-    return_date: "2026-11-22",
-  };
-  const script = Array.from({ length: 15 }, (): [string, Record<string, unknown>] => [
+  // Different dates each time, so none of these are cache hits.
+  const script = Array.from({ length: 15 }, (_, i): [string, Record<string, unknown>] => [
     "search_flights",
-    flights,
+    {
+      origin: "AUS",
+      destination: "DEN",
+      outbound_date: `2026-11-${String(i + 1).padStart(2, "0")}`,
+      return_date: "2026-11-28",
+    },
   ]);
   const { log, run } = setup(script);
   const result = await run();
@@ -93,6 +93,83 @@ Deno.test("stops at 10 tool calls", async () => {
   assertEquals(log.steps.filter((s) => s.tool === "search_flights").length, 10);
   // Nothing was pinned, so the verifier can't pass and the agent asks instead.
   assertEquals(result.status, "needs_input");
+});
+
+Deno.test("a repeated identical search is answered from cache, not the API", async () => {
+  const flights = {
+    origin: "AUS",
+    destination: "DEN",
+    outbound_date: "2026-11-20",
+    return_date: "2026-11-22",
+  };
+  const script = Array.from({ length: 5 }, (): [string, Record<string, unknown>] => [
+    "search_flights",
+    flights,
+  ]);
+  const { log, run } = setup(script);
+  const result = await run();
+
+  assertEquals(result.toolCalls, 5);
+  // Only the first call actually ran.
+  assertEquals(log.steps.filter((s) => s.tool === "search_flights").length, 1);
+});
+
+Deno.test("a failing tool is skipped after 2 failures instead of retried", async () => {
+  // JFK has no fixture, so every one of these fails.
+  const script = Array.from({ length: 6 }, (_, i): [string, Record<string, unknown>] => [
+    "search_flights",
+    {
+      origin: "AUS",
+      destination: "JFK",
+      outbound_date: `2026-12-0${i + 1}`,
+      return_date: "2026-12-09",
+    },
+  ]);
+  const { log, run } = setup(script);
+  await run();
+
+  const ran = log.steps.filter((s) => s.tool === "search_flights");
+  assertEquals(ran.length, 2);
+  assert(ran.every((s) => s.status === "failed"));
+});
+
+Deno.test("Muse Spark calls are capped per run", async () => {
+  let modelCalls = 0;
+  // A model that never stops asking for a tool that doesn't exist.
+  const endless = {
+    name: "endless",
+    complete: async (req: { tools?: unknown[] }) => {
+      modelCalls++;
+      if (!req.tools) return { role: "assistant" as const, content: '{"ok":true,"issues":[]}' };
+      return {
+        role: "assistant" as const,
+        content: null,
+        tool_calls: [
+          {
+            id: `c${modelCalls}`,
+            type: "function" as const,
+            function: { name: "ask_nothing", arguments: "{}" },
+          },
+        ],
+      };
+    },
+  };
+  const { plan } = setup();
+  await runAgent({
+    model: endless,
+    steps: memorySteps(),
+    maxToolCalls: 100,
+    ctx: {
+      planId: plan.id,
+      store: memoryStore(plan),
+      chat: demoChat,
+      userName: "Sidd",
+      found: new Map(),
+      bookingConfirmed: false,
+    },
+  });
+
+  assert(modelCalls <= MAX_MODEL_CALLS, `made ${modelCalls} model calls`);
 });
 
 Deno.test("verifier failure goes back to the planner once, then asks the group", async () => {
@@ -179,4 +256,32 @@ Deno.test("verified but a poll is still open: stays voting", async () => {
   assert(result.verified);
   assertEquals(plan.status, "voting");
   assertMatch(plan.summary ?? "", /^Denver, Nov 20–22/);
+});
+
+Deno.test("the verifier is told who the phone owner is", async () => {
+  const { plan } = setup();
+  const prompts: string[] = [];
+  const model = scriptedMuse();
+  await runAgent({
+    model: {
+      name: "spy",
+      complete: (req) => {
+        if (!req.tools) prompts.push(req.messages.map((m) => m.content ?? "").join("\n"));
+        return model.complete(req);
+      },
+    },
+    steps: memorySteps(),
+    ctx: {
+      planId: plan.id,
+      store: memoryStore(plan),
+      chat: demoChat,
+      userName: "Sidd",
+      found: new Map(),
+      bookingConfirmed: false,
+    },
+  });
+
+  assertEquals(prompts.length, 1);
+  assertMatch(prompts[0], /"owner":"Sidd"/);
+  assertMatch(prompts[0], /Don't flag the owner as missing from the chat/);
 });

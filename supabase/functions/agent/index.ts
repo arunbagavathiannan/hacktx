@@ -25,7 +25,12 @@ interface Body {
   source_app?: "whatsapp" | "instagram";
   chat_name?: string;
   refs?: string[];
+  // Where the group flies from if the chat doesn't say. Defaults to DEMO_HOME.
+  home?: { city: string; airport?: string };
 }
+
+// MOCK: no accounts or profiles yet, so the demo group's home base is Austin (HackTX).
+const DEMO_HOME = { city: "Austin", airport: "AUS", lat: 30.1975, lng: -97.6664 };
 
 const cors = {
   "Access-Control-Allow-Origin": "*",
@@ -82,6 +87,20 @@ Deno.serve(async (req) => {
     planId = data.id as string;
   }
 
+  // One run at a time per plan: a double tap shouldn't start a second, paid run. Only recent
+  // steps count, so a step left "running" by a crash doesn't lock the plan forever.
+  if (body.plan_id) {
+    const { count } = await db
+      .from("agent_steps")
+      .select("step_index", { count: "exact", head: true })
+      .eq("plan_id", planId)
+      .eq("status", "running")
+      .gt("started_at", new Date(Date.now() - 3 * 60_000).toISOString());
+    if (count)
+      return reply({ error: "Huddle is already working on this plan", plan_id: planId }, 409);
+  }
+
+  const real = museSpark();
   const ctx: ToolContext = {
     planId,
     store,
@@ -89,6 +108,8 @@ Deno.serve(async (req) => {
     userName: body.user_name ?? "You",
     found: new Map(),
     bookingConfirmed: false,
+    model: real ?? undefined,
+    home: body.home?.city ? body.home : DEMO_HOME,
   };
   const steps = supabaseSteps(db, planId);
 
@@ -105,10 +126,10 @@ Deno.serve(async (req) => {
     return reply({ ok: result.ok, summary: result.summary, booking: result.data });
   }
 
-  const real = museSpark();
   const model = real ?? scriptedMuse({ delayMs: 900 });
 
-  const work = runAgent({ model, ctx, steps, mockLatencyMs: 600 }).catch(async (err) => {
+  // MOCK: the fake latency only pads the scripted demo; real runs go at real speed.
+  const work = runAgent({ model, ctx, steps, mockLatencyMs: real ? 0 : 600 }).catch(async (err) => {
     console.error("agent run failed", err);
     // Friendly fallback: the timeline says what happened instead of spinning forever.
     await store.updatePlan(planId, { status: "failed" }).catch(() => {});

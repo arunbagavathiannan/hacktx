@@ -108,6 +108,8 @@ export const searchFlights = defineTool<Args>({
             arrival_time: last.arrival_airport.time,
             total_duration: f.total_duration,
             stops,
+            departure_id: origin,
+            arrival_id: destination,
             outbound_date: args.outbound_date,
             return_date: args.return_date,
             departure_token: f.departure_token,

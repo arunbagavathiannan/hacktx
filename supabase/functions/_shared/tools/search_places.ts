@@ -53,7 +53,12 @@ export const searchPlaces = defineTool<Args>({
           : null,
     );
 
-    const places = (res.local_results ?? [])
+    const found = res.local_results?.length
+      ? res.local_results
+      : res.place_results
+        ? [res.place_results]
+        : [];
+    const places = found
       .filter((p) => p.gps_coordinates)
       .sort((a, b) => (b.rating ?? 0) - (a.rating ?? 0))
       .slice(0, clampResults(args.max_results));

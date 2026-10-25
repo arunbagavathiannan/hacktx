@@ -10,7 +10,7 @@ arguments), a `describe` line for the timeline, and a handler. `index.ts` export
 
 | Tool | Does | Mock? |
 |---|---|---|
-| `extract_trip` | Who / where / when / budget from the chat → `plans.trip` | MOCK: demo trip (people from real senders) |
+| `extract_trip` | Who / where / when / budget from **any** chat (one Muse Spark call) → `plans.trip`; gaps go in `missing` so the agent asks | demo trip only when there is no Muse Spark key |
 | `search_flights` | SerpAPI `google_flights` | live with `SERPAPI_API_KEY`; else fixture (AUS → DEN) |
 | `search_hotels` | SerpAPI `google_hotels` | live with `SERPAPI_API_KEY`; else fixture (Denver) |
 | `search_places` | SerpAPI `google_maps` (restaurants / activities) | live with `SERPAPI_API_KEY`; else fixture (Denver) |
@@ -33,3 +33,17 @@ Function, `memoryStore(plan)` in tests.
 ```sh
 deno test --allow-env supabase/functions/_shared/tools/
 ```
+
+## API-call guards
+
+No failure turns into a loop of paid calls:
+
+- **Per run** (`agent/loop.ts`): at most 10 tool calls and 14 Muse Spark calls; an identical
+  repeat of a read-only call (`extract_trip`, `search_*`) is answered from cache; a tool that
+  fails twice is skipped for the rest of the run. Live calls are never retried.
+- **SerpAPI** (`../serpapi.ts`): after a failure, live calls pause for 60 s (10 min after
+  401 / 403 / 429) and searches use the fixture or fail politely. "No results" doesn't count.
+- **detect**: chats with nothing trip-like skip Muse Spark; the same batch within 10 minutes
+  reuses the earlier answer.
+- **agent**: a second run of a plan that's already running gets `409`; booking a plan that's
+  already booked returns the same confirmation with no new lookups.

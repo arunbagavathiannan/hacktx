@@ -49,6 +49,14 @@ export const book = defineTool<Args>({
     }
 
     const plan = await ctx.store.getPlan(ctx.planId);
+    // Already booked (e.g. a double tap): hand back that booking, no new SerpAPI lookups.
+    if (plan.status === "booked" && plan.trip.booking) {
+      const b = plan.trip.booking;
+      return {
+        summary: `Already confirmed ${b.confirmationCode} · ${usd(b.totalCents)} total`,
+        data: { ...b, total_usd: b.totalCents / 100, already_booked: true },
+      };
+    }
     const offers = await liveOffers(chosen);
     const totalCents = estimateTotal(chosen, offers, plan.trip.people.length);
     // MOCK: no real booking or payment. The code is Huddle's; the offers link to the real

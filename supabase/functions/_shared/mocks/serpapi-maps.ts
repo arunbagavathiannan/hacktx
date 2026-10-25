@@ -153,4 +153,7 @@ export interface MapsPlace {
 
 export interface MapsResponse {
   local_results?: MapsPlace[];
+  // When the query names one specific place ("Red Rocks"), Google Maps answers with that
+  // place alone instead of a list.
+  place_results?: MapsPlace;
 }

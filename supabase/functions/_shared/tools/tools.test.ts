@@ -131,3 +131,76 @@ Deno.test("bad calls come back as friendly failures, not crashes", async () => {
     assert(res.summary.length > 0);
   }
 });
+
+// A stand-in for Muse Spark that answers extract_trip with `reply` (or throws).
+const extractor = (reply: string | Error) => ({
+  name: "stub",
+  calls: 0,
+  async complete() {
+    this.calls++;
+    if (reply instanceof Error) throw reply;
+    return { role: "assistant" as const, content: reply };
+  },
+});
+
+Deno.test("extract_trip reads any trip from the chat with Muse Spark", async () => {
+  const { plan, ctx, call } = setup();
+  ctx.chat = [
+    { sender: "Maya", text: "nashville for spring break??", sentAt: "2026-10-24T18:00:00Z" },
+    { sender: "Jo", text: "march 13-15, keep it under 400", sentAt: "2026-10-24T18:01:00Z" },
+  ];
+  ctx.home = { city: "Austin", airport: "AUS" };
+  ctx.model = extractor(
+    'Sure! {"origin":null,"destination":{"city":"Nashville","airport":"bna","lat":36.16,"lng":-86.78},' +
+      '"startDate":"2027-03-13","endDate":"2027-03-15","people":["Maya","Jo"],' +
+      '"budgetPerPersonUsd":400,"constraints":["Spring break"],"missing":[]}',
+  );
+  const res = await call("extract_trip");
+
+  assert(res.ok, res.summary);
+  assertEquals(res.summary, "Nashville · 3 people · Mar 13–15 · $400 each");
+  assertEquals(plan.title, "Nashville weekend");
+  assertEquals(plan.trip.destination?.airport, "BNA");
+  assertEquals(plan.trip.origin, { city: "Austin", airport: "AUS" }); // home base
+  assertEquals(plan.trip.people, ["Sidd", "Maya", "Jo"]); // owner always included
+  assertEquals(plan.trip.missing, []);
+});
+
+Deno.test("extract_trip lists what the chat didn't settle, and drops bad fields", async () => {
+  const { plan, ctx, call } = setup();
+  ctx.model = extractor(
+    '{"destination":{"city":"Chicago","airport":"ORD1"},"startDate":"next friday",' +
+      '"endDate":"2027-01-10","budgetPerPersonUsd":-5,"missing":["dates","vibes"]}',
+  );
+  const res = await call("extract_trip");
+
+  assert(res.ok, res.summary);
+  assertEquals(plan.trip.destination?.city, "Chicago");
+  assertEquals(plan.trip.destination?.airport, undefined); // not a 3-letter code
+  assertEquals(plan.trip.startDate, undefined); // not a date
+  assertEquals(plan.trip.budgetPerPersonUsd, undefined);
+  assertEquals(plan.trip.missing, ["dates"]);
+  assertEquals(res.summary, "Chicago · 4 people · dates TBD");
+});
+
+Deno.test("extract_trip with no destination asks instead of guessing Denver", async () => {
+  const { plan, ctx, call } = setup();
+  ctx.model = extractor('{"destination":null,"people":["Sam"],"missing":[]}');
+  const res = await call("extract_trip");
+
+  assert(res.ok, res.summary);
+  assertEquals(plan.trip.destination, undefined);
+  assertEquals(plan.trip.missing.sort(), ["dates", "destination"]);
+  assertEquals(plan.title, "New trip");
+});
+
+Deno.test("extract_trip reports a Muse Spark failure once, no retry, no fake Denver", async () => {
+  const { plan, ctx, call } = setup();
+  const model = extractor(new Error("503"));
+  ctx.model = model;
+  const res = await call("extract_trip");
+
+  assert(!res.ok);
+  assertEquals(model.calls, 1);
+  assertEquals(plan.trip.destination, undefined);
+});

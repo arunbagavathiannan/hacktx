@@ -67,8 +67,11 @@ export function codeChecks(trip: Trip, options: StoredOption[]): string[] {
 const SYSTEM = `You are Huddle's verifier. Check a group trip plan before the group sees it.
 Using the chat, the extracted trip and the pinned options, look for: prices or links that
 don't match the search results in "details", dates or people that don't match the chat,
-a plan over budget, and constraints from the chat that were ignored. "code_issues" lists
-problems already found by exact checks. Reply with JSON only:
+a plan over budget, and constraints from the chat that were ignored. "owner" is the phone
+owner: they are in the group even though none of their messages are in the chat (Huddle
+reads other people's messages from notifications, so the owner's own messages never appear).
+Don't flag the owner as missing from the chat. "code_issues" lists problems already found
+by exact checks. Reply with JSON only:
 {"ok": boolean, "issues": ["short, specific problem", ...]}`;
 
 export async function verify(
@@ -76,10 +79,12 @@ export async function verify(
   chat: ChatMessage[],
   trip: Trip,
   options: StoredOption[],
+  owner: string,
 ): Promise<Verdict> {
   const issues = codeChecks(trip, options);
 
   const snapshot = {
+    owner,
     chat: chat.map((m) => `${m.sender}: ${m.text}`),
     trip,
     options: options.map(({ ref, category, title, priceCents, url, isSelected, details }) => ({

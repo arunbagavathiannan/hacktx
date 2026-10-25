@@ -35,6 +35,18 @@ interface HotelDetailsResponse {
   featured_prices?: HotelPrice[];
 }
 
+const MAX_OFFERS = 5;
+
+// The cheapest few, plus the official seller (airline or hotel site) if it didn't make the cut,
+// so the confirmation shows a short, trustworthy list.
+function topOffers(offers: BookingOffer[]): BookingOffer[] {
+  const sorted = [...offers].sort((a, b) => a.priceCents - b.priceCents);
+  const top = sorted.slice(0, MAX_OFFERS);
+  const official = sorted.find((o) => o.official);
+  if (official && !top.includes(official)) top.push(official);
+  return top;
+}
+
 const nights = (checkIn: string, checkOut: string) =>
   Math.max(1, Math.round((Date.parse(checkOut) - Date.parse(checkIn)) / 86_400_000));
 
@@ -46,6 +58,9 @@ export async function flightOffers(option: StoredOption): Promise<BookingOffer[]
   if (!bookingToken && typeof d.departure_token === "string") {
     const returns = await serpapi<FlightBookingResponse>("google_flights", {
       departure_token: d.departure_token,
+      // SerpAPI wants the route again alongside the token.
+      departure_id: d.departure_id as string,
+      arrival_id: d.arrival_id as string,
       type: 1,
       outbound_date: d.outbound_date as string,
       return_date: d.return_date as string,
@@ -56,13 +71,16 @@ export async function flightOffers(option: StoredOption): Promise<BookingOffer[]
       .sort((a, b) => (a.price ?? Infinity) - (b.price ?? Infinity))[0];
     bookingToken = cheapest?.booking_token;
   }
-  if (!bookingToken) return [];
+  if (!bookingToken) {
+    console.warn(`no booking_token for ${option.ref}; no flight offers`);
+    return [];
+  }
 
   const res = await serpapi<FlightBookingResponse>("google_flights", {
     booking_token: bookingToken,
     currency: "USD",
   });
-  return (res.booking_options ?? [])
+  const offers = (res.booking_options ?? [])
     .map((o) => o.together)
     .filter((t): t is FlightBookingOption => t?.price !== undefined && Boolean(t.book_with))
     .map((t) => ({
@@ -70,9 +88,10 @@ export async function flightOffers(option: StoredOption): Promise<BookingOffer[]
       seller: t.book_with ?? "",
       priceCents: Math.round((t.price ?? 0) * 100),
       phone: t.booking_phone,
+      official: option.title.startsWith(`${t.book_with} `),
       bookingRequest: t.booking_request,
-    }))
-    .sort((a, b) => a.priceCents - b.priceCents);
+    }));
+  return topOffers(offers);
 }
 
 // Hotel property details: every site selling the room, with a direct link (1 search).
@@ -91,7 +110,7 @@ export async function hotelOffers(option: StoredOption): Promise<BookingOffer[]>
   });
 
   const seen = new Set<string>();
-  return [...(res.featured_prices ?? []), ...(res.prices ?? [])]
+  const offers = [...(res.featured_prices ?? []), ...(res.prices ?? [])]
     .map((p) => {
       const total =
         p.total_rate?.extracted_lowest ??
@@ -104,8 +123,8 @@ export async function hotelOffers(option: StoredOption): Promise<BookingOffer[]>
         official: p.official,
       };
     })
-    .filter((o) => o.seller && o.priceCents > 0 && !seen.has(o.seller) && seen.add(o.seller))
-    .sort((a, b) => a.priceCents - b.priceCents);
+    .filter((o) => o.seller && o.priceCents > 0 && !seen.has(o.seller) && seen.add(o.seller));
+  return topOffers(offers);
 }
 
 // Live offers for every chosen flight and hotel, in parallel. One failing lookup doesn't stop
