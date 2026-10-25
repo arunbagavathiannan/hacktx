@@ -1,0 +1,97 @@
+name: Claude Review
+
+# Reviews every PR automatically, Meta-style: a Fable orchestrator splits the review across
+# specialist Opus reviewer agents, then posts one combined review. A human still merges.
+#
+# Uses pull_request_target so the run comes from main and can reach the main-only `claude`
+# environment. Safe because Claude only READS the PR (no install, build, or scripts from it),
+# and PRs from forks are skipped.
+
+on:
+  pull_request_target:
+    types: [opened, synchronize, ready_for_review, reopened]
+
+concurrency:
+  group: claude-review-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  claude-review:
+    if: github.event.pull_request.draft == false && github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    environment: claude
+    permissions:
+      contents: read
+      pull-requests: write
+      issues: write
+      id-token: write
+    steps:
+      - name: Checkout PR head (read only)
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Review
+        id: review
+        uses: anthropics/claude-code-action@v1
+        with:
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          track_progress: true
+
+          prompt: |
+            REPO: ${{ github.repository }}
+            PR NUMBER: ${{ github.event.pull_request.number }}
+            BASE: ${{ github.event.pull_request.base.ref }}
+
+            You are the review orchestrator for Huddle (read CLAUDE.md first, especially
+            "How we build with agents"). Review this PR the way Meta engineers do: specialist
+            reviewers first, a human merges after.
+
+            1. Get the diff with `gh pr diff` and the description with `gh pr view`.
+            2. Run these reviewer agents IN PARALLEL, giving each the diff, the PR description,
+               and the relevant CLAUDE.md sections:
+               - correctness-reviewer: bugs, edge cases (empty data, n = 0, missing fields,
+                 API/tool failure), broken flows on the demo path.
+               - intent-reviewer: does the code do what the PR description and linked issue
+                 say? Anything claimed but missing, or changed but not mentioned?
+               - scope-reviewer: stays inside CLAUDE.md (stack, real vs. mocked, guardrails,
+                 "use existing libraries", no API keys in the app, mocks marked `// MOCK:`),
+                 and the PR shows evidence (screenshots or diagram, check output).
+               - security-reviewer: secrets, keys, unsafe input, privacy of chat data.
+            3. Verify each finding yourself against the code. Drop anything you can't confirm.
+            4. Post inline comments for specific confirmed issues, then ONE summary comment:
+               verdict (looks good / needs changes), findings ranked most severe first, and
+               what a human should check before merging.
+            5. Return the structured result: verdict is "needs_changes" only when there is at
+               least one confirmed blocking issue (a bug on the demo path, a leaked secret, a
+               CLAUDE.md guardrail broken, or claimed work that isn't there). Style, naming,
+               and nice-to-haves never block.
+
+            Rules: read-only. Never push, approve, request changes, or merge. Don't run
+            install, build, or project scripts. Be concise; no praise padding.
+
+          claude_args: |
+            --model claude-fable-5-1
+            --max-turns 40
+            --allowedTools "Agent,mcp__github_inline_comment__create_inline_comment,Bash(gh pr comment:*),Bash(gh pr diff:*),Bash(gh pr view:*)"
+            --json-schema '{"type":"object","properties":{"verdict":{"type":"string","enum":["approve","needs_changes"]},"blocking":{"type":"integer"},"summary":{"type":"string"}},"required":["verdict","summary"]}'
+            --agents '{"correctness-reviewer":{"description":"Finds bugs and unhandled edge cases in a PR diff","prompt":"You review code for correctness. Report only concrete bugs with file:line, the failing input or state, and the fix. No style nits.","model":"opus"},"intent-reviewer":{"description":"Checks a PR diff matches its description","prompt":"You compare what a PR claims against what the code does. Report claims not implemented and changes not mentioned, with file:line.","model":"opus"},"scope-reviewer":{"description":"Checks a PR against CLAUDE.md rules and evidence requirements","prompt":"You check a PR follows the repo CLAUDE.md: stack, real vs mocked, guardrails, existing-library rule, mocks marked // MOCK:, no keys in the app, and that the PR shows screenshots or a diagram plus check output. Quote the rule for each violation.","model":"opus"},"security-reviewer":{"description":"Checks a PR for secrets, unsafe input handling, and chat-data privacy","prompt":"You review for security and privacy: leaked secrets or API keys, unsafe input handling, and how chat messages are stored or sent. Report only concrete issues with file:line.","model":"opus"}}'
+
+      # Turns the verdict into a pass/fail check. Make it required in branch protection
+      # once it has proven itself on a few PRs.
+      - name: Verdict
+        env:
+          RESULT: ${{ steps.review.outputs.structured_output }}
+        run: |
+          echo "$RESULT" | jq .
+          verdict=$(echo "$RESULT" | jq -r '.verdict // "unknown"')
+          summary=$(echo "$RESULT" | jq -r '.summary // ""')
+          echo "### Claude review: $verdict" >> "$GITHUB_STEP_SUMMARY"
+          echo "$summary" >> "$GITHUB_STEP_SUMMARY"
+          if [ "$verdict" != "approve" ]; then
+            echo "::error::Claude review verdict: $verdict"
+            exit 1
+          fi
