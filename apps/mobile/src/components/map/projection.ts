@@ -84,19 +84,9 @@ export function corePlaceIds(places: Array<LatLng & { id: string }>) {
   return new Set((near.length > 0 ? near : places).map((p) => p.id));
 }
 
-// map.tsx fades the top of the map under the chips (a 72 px gradient). The tile attribution
-// sits right below that fade, and pins are kept clear of it so it's never covered.
+// map.tsx fades the top of the map under the chips (a 72 px gradient). A callout opened
+// near the top stays below it.
 export const TOP_FADE = 72;
-export const ATTRIBUTION_TOP = TOP_FADE + 2;
-const ATTRIBUTION_HEIGHT = 20;
-const PIN_CLEARANCE = 26; // a selected pin's radius plus a little air
-
-export function withAttributionRoom(insets: Insets): Insets {
-  return {
-    ...insets,
-    top: Math.max(insets.top, ATTRIBUTION_TOP + ATTRIBUTION_HEIGHT + PIN_CLEARANCE),
-  };
-}
 
 // The map's view for these places: fit to the core ones. Shared by MapCanvas and the tile
 // prefetcher so both ask for the same tiles.

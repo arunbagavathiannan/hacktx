@@ -1,4 +1,4 @@
-import { AirplaneTilt, CircleIcon, RadioButton } from "phosphor-react-native";
+import { CircleIcon, RadioButton } from "phosphor-react-native";
 import { Pressable, ScrollView, Text, View } from "react-native";
 import type { Flight, Member } from "@/mocks/types";
 import { colors } from "@/theme";
@@ -12,6 +12,9 @@ type Props = {
   route: string; // "AUS → DEN"
   showHeader?: boolean; // the Route view labels each leg itself
 };
+
+// Fixed-width digits for prices and times.
+const TABULAR = { fontVariant: ["tabular-nums" as const] };
 
 // Compact, horizontally scrolling flight options. Single-select: the whole group flies on
 // the same plane, so picking one replaces the other.
@@ -29,15 +32,13 @@ export function FlightsRow({
   return (
     <View className="gap-2" accessibilityRole="radiogroup" accessibilityLabel={`Flights ${route}`}>
       {showHeader ? (
-        <View className="flex-row items-center gap-1.5 px-5">
-          <AirplaneTilt size={14} color={colors.muted} weight="regular" />
-          <Text className="font-body-bold text-xs uppercase tracking-widest text-muted">
-            One flight {route}
+        <Text numberOfLines={1} className="px-5 font-body-semibold text-small text-muted">
+          One flight, {route}
+          <Text className="font-body text-caption text-faint">
+            {"  "}
+            {sourceLabel.serpapi_flights}
           </Text>
-          <Text numberOfLines={1} className="flex-1 font-body text-xs text-faint">
-            · {sourceLabel.serpapi_flights}
-          </Text>
-        </View>
+        </Text>
       ) : null}
       <ScrollView
         horizontal
@@ -67,13 +68,19 @@ export function FlightsRow({
               )}
               <View className="flex-1 gap-0.5">
                 <View className="flex-row items-center justify-between gap-2">
-                  <Text numberOfLines={1} className="flex-1 font-body-bold text-sm text-ink">
+                  <Text numberOfLines={1} className="flex-1 font-body-semibold text-small text-ink">
                     {f.airline}
                   </Text>
-                  <Text className="font-body-bold text-sm text-ink">${f.pricePerPerson}</Text>
+                  <Text className="font-body-bold text-small text-ink" style={TABULAR}>
+                    ${f.pricePerPerson}
+                  </Text>
                 </View>
                 <View className="flex-row items-center justify-between gap-2">
-                  <Text numberOfLines={1} className="flex-1 font-body text-xs text-muted">
+                  <Text
+                    numberOfLines={1}
+                    className="flex-1 font-body text-caption text-muted"
+                    style={TABULAR}
+                  >
                     {f.depart} · {f.stops === 0 ? "Nonstop" : `${f.stops} stop`}
                   </Text>
                   <View className="flex-row items-center">

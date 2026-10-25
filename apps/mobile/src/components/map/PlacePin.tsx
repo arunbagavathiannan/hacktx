@@ -134,7 +134,8 @@ export function PlacePin({
       {offMapLabel ? (
         <View
           pointerEvents="none"
-          className="absolute rounded-full border border-line bg-surface/95 px-2.5 py-1"
+          // A label, not a control: small radius, no stadium (pills mean "tap me").
+          className="absolute rounded-lg bg-bg/85 px-2 py-1"
           style={{
             top: size / 2 - 12,
             ...(offMapAngle !== undefined && Math.cos(offMapAngle) > 0

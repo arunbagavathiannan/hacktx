@@ -2,7 +2,7 @@ import { Image } from "expo-image";
 import { Dimensions } from "react-native";
 import { places } from "@/mocks";
 import type { Place } from "@/mocks/types";
-import { corePlaceIds, fitMap, type Insets, type Size, withAttributionRoom } from "../projection";
+import { corePlaceIds, fitMap, type Insets, type Size } from "../projection";
 import { LAYERS, visibleTiles } from "./TileLayer";
 
 // Must match MAP_INSETS in app/plan/map.tsx (room for the chips and the flights row).
@@ -32,7 +32,7 @@ export function prefetchMapTiles(
     width: window.width,
     height: Math.max(320, window.height - NON_MAP_HEIGHT),
   };
-  const proj = fitMap(mapPlaces, corePlaceIds(mapPlaces), size, withAttributionRoom(insets));
+  const proj = fitMap(mapPlaces, corePlaceIds(mapPlaces), size, insets);
   const urls = LAYERS.flatMap((layer) => visibleTiles(proj, size, layer, PAD).map((t) => t.url));
   const retryLater = () => {
     started.delete(key); // offline right now: let a later call try again

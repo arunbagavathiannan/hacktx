@@ -240,3 +240,7 @@ export function degreesBetween(a: { lat: number; lng: number }, b: { lat: number
 }
 
 export const easeInOutCubic = (t: number) => (t < 0.5 ? 4 * t * t * t : 1 - (-2 * t + 2) ** 3 / 2);
+
+// The camera's swing (DESIGN.md "Motion": calm, not bouncy): one ease-out that starts moving
+// right away and settles without overshoot. Stays inside 0-1 for any t in 0-1.
+export const easeOutCubic = (t: number) => 1 - (1 - t) ** 3;
