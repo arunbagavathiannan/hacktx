@@ -7,8 +7,8 @@ import { LAYERS, visibleTiles } from "./TileLayer";
 
 // Must match MAP_INSETS in app/plan/map.tsx (room for the chips and the flights row).
 export const DEMO_MAP_INSETS: Insets = { top: 96, right: 52, bottom: 132, left: 52 };
-// Screen height the map screen doesn't give the map: header, footer, and safe areas.
-const NON_MAP_HEIGHT = 190;
+// Screen height the map screen doesn't give the map: header, Route/City toggle, footer, safe areas.
+const NON_MAP_HEIGHT = 258;
 // Extra margin of tiles around the estimate, in case the real map is a bit bigger or shifted.
 const PAD = 160;
 
