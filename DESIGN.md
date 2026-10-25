@@ -144,13 +144,13 @@ components:
     padding: "16px"
 ---
 
-<!-- Written from a design review on 2026-10-24 (notes/design-review/CRITIQUE.md). Tokens marked "(refined)" below differ from the code at main@4c7ea73; everything else is extracted from it. To make it the repo's source of truth, copy to hacktx/DESIGN.md after Arun/Villy approve. The North Star is proposed, not yet confirmed. -->
+<!-- Written from a design review on 2026-10-24 (docs/design-review.md). Tokens marked "(refined)" below differ from the code at main@4c7ea73; everything else is extracted from it. To make it the repo's source of truth, copy to hacktx/DESIGN.md after Arun/Villy approve. The North Star is proposed, not yet confirmed. -->
 
 # Design System: Huddle
 
 > **Approved direction: "The Ticket Stub"** (Arun, 2026-10-24). One ticket card per screen, perforation dividers, sunset gradient only on ticket tops, green only for success, teal (`cat-do`) and rose (`cat-night`) map pins. "Simulate a plan" stays the main Home button for the live demo. The heads-up popup quotes the chat message that triggered it.
 
-> Source of truth for every UI change. Builders read this plus `notes/design-review/CRITIQUE.md` (per-screen fixes). Generated from an Impeccable review of the web build.
+> Source of truth for every UI change. Builders read this plus `docs/design-review.md` (per-screen fixes). Generated from an Impeccable review of the web build.
 
 ## Overview
 
