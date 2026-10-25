@@ -109,7 +109,17 @@ function Booked() {
     <Screen
       scroll
       className="gap-8"
-      footer={<Button label="Done" variant="secondary" onPress={() => router.replace("/")} />}
+      footer={
+        <Button
+          label="Done"
+          variant="secondary"
+          onPress={() => {
+            // Close the whole plan (chat, timeline, map) so the next simulation starts fresh.
+            if (router.canDismiss()) router.dismissAll();
+            router.replace("/");
+          }}
+        />
+      }
     >
       {/* The share card is the confirmation: the ticket the group gets. Fading in, top to
           bottom, is this screen's one motion (DESIGN.md "Motion"). */}
