@@ -15,7 +15,7 @@ import {
 } from "@/components/onboarding/options";
 import { ProgressBar } from "@/components/onboarding/ProgressBar";
 import { Body, Button, Chip, Display, Screen } from "@/components/ui";
-import { usePreferences, usePreferencesHydrated } from "@/store/preferences";
+import { usePreferences } from "@/store/preferences";
 import { colors, icon } from "@/theme";
 import { nudgeIn } from "@/theme/motion";
 
@@ -70,10 +70,6 @@ export default function Onboarding() {
       return () => sub.remove();
     }, [step]),
   );
-
-  // Wait for saved answers to load, so a cold start never shows (or saves over) empty ones.
-  const hydrated = usePreferencesHydrated();
-  if (!hydrated) return <View className="flex-1 bg-bg" />;
 
   const { title, subtitle } = steps[step];
   // The page slides in (8px) from the side you are heading to.
