@@ -47,3 +47,16 @@ No failure turns into a loop of paid calls:
   reuses the earlier answer.
 - **agent**: a second run of a plan that's already running gets `409`; booking a plan that's
   already booked returns the same confirmation with no new lookups.
+
+## Preferences
+
+The app sends the owner's onboarding answers as `preferences` (same shape as the app's
+`Preferences`) when it starts a run. `../preferences.ts` cleans them up, and then:
+
+- **Planner:** gets them in its first message ("My preferences: …"). Food is a hard rule.
+- **search_hotels:** the budget tier caps the nightly price (`$` ≈ $200, `$$` ≈ $350, `$$$` none)
+  unless the model sets its own cap.
+- **search_flights:** "Short flight (<3h)" means nonstop unless the model says otherwise.
+- **search_places:** dietary needs are added to restaurant searches ("… Vegetarian friendly").
+- **Verifier:** code checks the chosen hotel against the budget tier and flags flights with
+  stops for "Short flight"; the model pass checks restaurants against food restrictions.

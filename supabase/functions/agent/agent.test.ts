@@ -285,3 +285,36 @@ Deno.test("the verifier is told who the phone owner is", async () => {
   assertMatch(prompts[0], /"owner":"Sidd"/);
   assertMatch(prompts[0], /Don't flag the owner as missing from the chat/);
 });
+
+Deno.test("preferences reach the planner and the verifier", async () => {
+  const { plan } = setup();
+  const planner: string[] = [];
+  const verifier: string[] = [];
+  const model = scriptedMuse();
+  const result = await runAgent({
+    model: {
+      name: "spy",
+      complete: (req) => {
+        const text = req.messages.map((m) => m.content ?? "").join("\n");
+        (req.tools ? planner : verifier).push(text);
+        return model.complete(req);
+      },
+    },
+    steps: memorySteps(),
+    ctx: {
+      planId: plan.id,
+      store: memoryStore(plan),
+      chat: demoChat,
+      userName: "Sidd",
+      found: new Map(),
+      bookingConfirmed: false,
+      preferences: { vibes: ["Outdoorsy"], budget: "$$", food: ["Vegan"], maxTravel: null },
+    },
+  });
+
+  assertMatch(planner[0], /My preferences:\nVibe: Outdoorsy/);
+  assertMatch(planner[0], /Food: Vegan\. Every restaurant must work for this\./);
+  assertMatch(verifier[0], /"preferences":\{"vibes":\["Outdoorsy"\]/);
+  // $$ allows up to $350/night, so the demo plan still passes.
+  assert(result.verified);
+});

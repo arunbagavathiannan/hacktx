@@ -1,4 +1,5 @@
 import type { AssistantMessage, ChatModel, LlmMessage } from "../_shared/muse.ts";
+import { describePreferences } from "../_shared/preferences.ts";
 import { describeCall, runTool, toolDefinitions } from "../_shared/tools/index.ts";
 import { pollsDecided } from "../_shared/tools/tally_votes.ts";
 import type { PlanStatus, ToolContext } from "../_shared/tools/types.ts";
@@ -54,6 +55,8 @@ talking about by calling tools. Rules:
   question and stop.
 - Search flights, hotels, things to do and food, then pin_on_map the best 2-4 options per
   category, favouring what the chat asked for and staying within the budget.
+- Follow the owner's preferences (vibe, budget, food, travel) when you choose what to search
+  and pin. Food restrictions are hard rules; vibe and budget are strong leanings.
 - Let the group decide: create_poll for the hotel, then tally_votes.
 - Never call book unless the group has tapped Book. Never invent prices or links; only use
   what the tools returned.
@@ -83,11 +86,14 @@ export async function runAgent(deps: AgentDeps): Promise<AgentResult> {
   const ctx: ToolContext = { ...deps.ctx, model: deps.ctx.model && counted(deps.ctx.model) };
 
   const transcript = ctx.chat.map((m) => `${m.sender}: ${m.text}`).join("\n");
+  const prefs = describePreferences(ctx.preferences);
   const messages: LlmMessage[] = [
     { role: "system", content: SYSTEM },
     {
       role: "user",
-      content: `Group chat (I'm ${ctx.userName}). Plan this:\n${transcript}`,
+      content:
+        `Group chat (I'm ${ctx.userName}). Plan this:\n${transcript}` +
+        (prefs ? `\n\nMy preferences:\n${prefs}` : ""),
     },
   ];
 
@@ -165,7 +171,14 @@ export async function runAgent(deps: AgentDeps): Promise<AgentResult> {
     if (deps.mockLatencyMs) await sleep(deps.mockLatencyMs);
     const current = await ctx.store.getPlan(ctx.planId);
     const options = await ctx.store.listOptions(ctx.planId);
-    const verdict = await verify(model, ctx.chat, current.trip, options, ctx.userName);
+    const verdict = await verify(
+      model,
+      ctx.chat,
+      current.trip,
+      options,
+      ctx.userName,
+      ctx.preferences,
+    );
 
     if (verdict.ok) {
       const budget = current.trip.budgetPerPersonUsd;

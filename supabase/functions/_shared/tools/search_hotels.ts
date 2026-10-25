@@ -1,4 +1,5 @@
 import { type HotelsResponse, serpapiHotelsDenver } from "../mocks/serpapi-hotels.ts";
+import { nightlyCapUsd } from "../preferences.ts";
 import { liveOrFixture, serpapi } from "../serpapi.ts";
 import { addFound, clampResults, count, defineTool, forModel, isDemoCity, usd } from "./helpers.ts";
 import { type Option, ToolError } from "./types.ts";
@@ -32,6 +33,8 @@ export const searchHotels = defineTool<Args>({
   },
   describe: (a) => `Searching hotels in ${a.location}`,
   async run(args, ctx) {
+    // The owner's budget tier caps the nightly price unless the model set its own cap.
+    const cap = args.max_price_per_night ?? nightlyCapUsd(ctx.preferences);
     const { data: res, source } = await liveOrFixture<HotelsResponse>(
       "hotel",
       () =>
@@ -40,7 +43,7 @@ export const searchHotels = defineTool<Args>({
           check_in_date: args.check_in_date,
           check_out_date: args.check_out_date,
           adults: args.adults ?? 2,
-          max_price: args.max_price_per_night,
+          max_price: cap,
           currency: "USD",
         }),
       // MOCK: fixture for the demo city only.
@@ -54,11 +57,7 @@ export const searchHotels = defineTool<Args>({
           h.rate_per_night?.extracted_lowest !== undefined &&
           h.total_rate?.extracted_lowest !== undefined,
       )
-      .filter(
-        (h) =>
-          args.max_price_per_night === undefined ||
-          (h.rate_per_night?.extracted_lowest ?? 0) <= args.max_price_per_night,
-      )
+      .filter((h) => cap === undefined || (h.rate_per_night?.extracted_lowest ?? 0) <= cap)
       .sort((a, b) => (b.overall_rating ?? 0) - (a.overall_rating ?? 0))
       .slice(0, clampResults(args.max_results));
 

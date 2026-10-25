@@ -3,6 +3,7 @@ import {
   mapsDenverActivities,
   mapsDenverRestaurants,
 } from "../mocks/serpapi-maps.ts";
+import { foodRestrictions } from "../preferences.ts";
 import { liveOrFixture, serpapi } from "../serpapi.ts";
 import { addFound, clampResults, count, defineTool, forModel, isDemoCity } from "./helpers.ts";
 import type { Option } from "./types.ts";
@@ -37,12 +38,16 @@ export const searchPlaces = defineTool<Args>({
   describe: (a) =>
     `Finding ${a.kind === "restaurant" ? "places to eat" : "things to do"} in ${a.location}`,
   async run(args, ctx) {
+    // Dietary needs from onboarding go into every restaurant search.
+    const diet = args.kind === "restaurant" ? foodRestrictions(ctx.preferences) : [];
+    const missing = diet.filter((d) => !args.query.toLowerCase().includes(d.toLowerCase()));
+    const query = missing.length ? `${args.query} ${missing.join(" ")} friendly` : args.query;
     const { data: res, source } = await liveOrFixture<MapsResponse>(
       "places",
       () =>
         serpapi("google_maps", {
           type: "search",
-          q: `${args.query} in ${args.location}`,
+          q: `${query} in ${args.location}`,
         }),
       // MOCK: fixture for the demo city only.
       () =>
@@ -82,6 +87,7 @@ export const searchPlaces = defineTool<Args>({
             rating: p.rating,
             reviews: p.reviews,
             price: p.price,
+            ...(diet.length ? { dietary: diet } : {}),
           },
         }),
       ),

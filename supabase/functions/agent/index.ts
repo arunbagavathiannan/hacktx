@@ -2,13 +2,15 @@
 // It answers right away with the plan id (so the app can subscribe to agent_steps), then runs
 // the agent in the background. See "Agent design" in CLAUDE.md.
 //
-// POST { chat?, user_name?, source_app?, chat_name?, plan_id? }  → 202 { plan_id, model }
+// POST { chat?, user_name?, source_app?, chat_name?, plan_id?, home?, preferences? }
+//   → 202 { plan_id, model }   (preferences: the app's onboarding answers)
 // POST { action: "book", plan_id, refs? }                        → 200 { ok, summary }
 
 import { createClient } from "jsr:@supabase/supabase-js@2";
 import { demoChat } from "../_shared/mocks/demo-trip.ts";
 import { scriptedMuse } from "../_shared/mocks/muse-script.ts";
 import { museSpark } from "../_shared/muse.ts";
+import { toPreferences } from "../_shared/preferences.ts";
 import { runTool } from "../_shared/tools/index.ts";
 import { supabaseStore } from "../_shared/tools/store.ts";
 import type { ChatMessage, StoredOption, ToolContext } from "../_shared/tools/types.ts";
@@ -27,6 +29,8 @@ interface Body {
   refs?: string[];
   // Where the group flies from if the chat doesn't say. Defaults to DEMO_HOME.
   home?: { city: string; airport?: string };
+  // The phone owner's onboarding answers, in the app's Preferences shape.
+  preferences?: unknown;
 }
 
 // MOCK: no accounts or profiles yet, so the demo group's home base is Austin (HackTX).
@@ -110,6 +114,7 @@ Deno.serve(async (req) => {
     bookingConfirmed: false,
     model: real ?? undefined,
     home: body.home?.city ? body.home : DEMO_HOME,
+    preferences: toPreferences(body.preferences),
   };
   const steps = supabaseSteps(db, planId);
 

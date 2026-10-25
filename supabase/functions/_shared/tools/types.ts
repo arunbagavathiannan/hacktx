@@ -2,6 +2,7 @@
 // shape, which Muse Spark accepts (see "Agent design" in CLAUDE.md).
 
 import type { ChatModel } from "../muse.ts";
+import type { Preferences } from "../preferences.ts";
 
 export type Category = "flight" | "hotel" | "restaurant" | "activity";
 
@@ -124,6 +125,8 @@ export interface ToolContext {
   model?: ChatModel;
   // Where the group starts from when the chat doesn't say (flights need an origin).
   home?: Place;
+  // The phone owner's onboarding answers. Searches default to them; the verifier checks them.
+  preferences?: Preferences;
 }
 
 export interface ToolResult {

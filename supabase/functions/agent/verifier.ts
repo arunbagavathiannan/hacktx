@@ -1,4 +1,5 @@
 import { type ChatModel, parseJsonReply } from "../_shared/muse.ts";
+import { nightlyCapUsd, type Preferences, wantsNonstop } from "../_shared/preferences.ts";
 import type { ChatMessage, StoredOption, Trip } from "../_shared/tools/types.ts";
 
 // The verifier checks the plan before anyone sees it (see "Agent design" in CLAUDE.md).
@@ -23,7 +24,7 @@ export function perPersonCents(options: StoredOption[]) {
   return pick("flight") + Math.round(pick("hotel") / 2);
 }
 
-export function codeChecks(trip: Trip, options: StoredOption[]): string[] {
+export function codeChecks(trip: Trip, options: StoredOption[], prefs?: Preferences): string[] {
   const issues: string[] = [];
 
   if (options.length === 0) issues.push("Nothing is pinned to the plan yet.");
@@ -61,13 +62,38 @@ export function codeChecks(trip: Trip, options: StoredOption[]): string[] {
     }
   }
 
+  // The owner's budget tier: the chosen hotel (or, before a vote, at least one option) must
+  // fit the nightly cap.
+  const cap = nightlyCapUsd(prefs);
+  const hotels = options.filter((o) => o.category === "hotel");
+  const perNight = (o: StoredOption) => Number(o.details.rate_per_night ?? 0);
+  if (cap !== undefined && hotels.length) {
+    const chosen = hotels.find((o) => o.isSelected);
+    if (chosen && perNight(chosen) > cap) {
+      issues.push(
+        `${chosen.title} is $${perNight(chosen)}/night, over the ${prefs?.budget} budget (~$${cap}).`,
+      );
+    } else if (!chosen && hotels.every((o) => perNight(o) > cap)) {
+      issues.push(`Every hotel is over the ${prefs?.budget} budget (~$${cap}/night).`);
+    }
+  }
+
+  // "Short flight" means nonstop.
+  if (wantsNonstop(prefs)) {
+    for (const o of options.filter((x) => x.category === "flight" && Number(x.details.stops) > 0)) {
+      issues.push(`${o.title} has a stop, but the owner wants short nonstop flights.`);
+    }
+  }
+
   return issues;
 }
 
 const SYSTEM = `You are Huddle's verifier. Check a group trip plan before the group sees it.
 Using the chat, the extracted trip and the pinned options, look for: prices or links that
 don't match the search results in "details", dates or people that don't match the chat,
-a plan over budget, and constraints from the chat that were ignored. "owner" is the phone
+a plan over budget, constraints from the chat that were ignored, and options that clash
+with "preferences" (the owner's onboarding answers: food restrictions are hard rules, so flag
+any restaurant that doesn't work for them; vibe, budget and travel are strong leanings). "owner" is the phone
 owner: they are in the group even though none of their messages are in the chat (Huddle
 reads other people's messages from notifications, so the owner's own messages never appear).
 Don't flag the owner as missing from the chat. "code_issues" lists problems already found
@@ -80,11 +106,13 @@ export async function verify(
   trip: Trip,
   options: StoredOption[],
   owner: string,
+  prefs?: Preferences,
 ): Promise<Verdict> {
-  const issues = codeChecks(trip, options);
+  const issues = codeChecks(trip, options, prefs);
 
   const snapshot = {
     owner,
+    preferences: prefs ?? null,
     chat: chat.map((m) => `${m.sender}: ${m.text}`),
     trip,
     options: options.map(({ ref, category, title, priceCents, url, isSelected, details }) => ({

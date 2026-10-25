@@ -1,4 +1,5 @@
 import { type FlightsResponse, serpapiFlightsAusDen } from "../mocks/serpapi-flights.ts";
+import { wantsNonstop } from "../preferences.ts";
 import { liveOrFixture, serpapi } from "../serpapi.ts";
 import {
   addFound,
@@ -45,6 +46,8 @@ export const searchFlights = defineTool<Args>({
   describe: (a) => `Searching flights ${a.origin.toUpperCase()} → ${a.destination.toUpperCase()}`,
   async run(args, ctx) {
     const origin = args.origin.toUpperCase();
+    // "Short flight" in onboarding means nonstop unless the model asked otherwise.
+    const nonstop = args.nonstop_only ?? wantsNonstop(ctx.preferences);
     const destination = args.destination.toUpperCase();
 
     const { data: res, source } = await liveOrFixture<FlightsResponse>(
@@ -56,7 +59,7 @@ export const searchFlights = defineTool<Args>({
           outbound_date: args.outbound_date,
           return_date: args.return_date,
           type: 1,
-          stops: args.nonstop_only ? 1 : 0,
+          stops: nonstop ? 1 : 0,
           currency: "USD",
         }),
       // MOCK: fixture for the demo route only.
@@ -65,7 +68,7 @@ export const searchFlights = defineTool<Args>({
 
     const flights = [...(res.best_flights ?? []), ...(res.other_flights ?? [])]
       .filter((f) => f.price !== undefined && f.flights.length > 0)
-      .filter((f) => !args.nonstop_only || f.flights.length === 1)
+      .filter((f) => !nonstop || f.flights.length === 1)
       .sort((a, b) => (a.price ?? 0) - (b.price ?? 0))
       .slice(0, clampResults(args.max_results));
 
