@@ -1,8 +1,8 @@
 import { AirplaneTilt, Car } from "phosphor-react-native";
 import { useMemo, useState } from "react";
 import { ScrollView, Text, View } from "react-native";
-import Animated, { FadeIn } from "react-native-reanimated";
-import { DRIVE_ARC_COLOR } from "@/components/globe/GlobeScene";
+import Animated, { FadeIn, useReducedMotion } from "react-native-reanimated";
+import { DRIVE_ARC_COLOR, type ScreenPoint } from "@/components/globe/GlobeScene";
 import { SafeGlobe } from "@/components/globe/SafeGlobe";
 import { FlightsRow } from "@/components/map/FlightsRow";
 import { groupSize } from "@/lib/pricing";
@@ -10,6 +10,7 @@ import type { Member, Trip } from "@/mocks/types";
 import { colors } from "@/theme";
 import { DriveCard } from "./DriveCard";
 import { airportFor, globeRoute, type LegPlan } from "./legs";
+import { StopLabels } from "./StopLabels";
 
 type Props = {
   trip: Trip;
@@ -21,6 +22,9 @@ type Props = {
   globeFrozenAt?: number;
   onGlobeSettled?: () => void; // the swing-in finished
 };
+
+const GLOBE_HEIGHT = 340;
+const LEGEND_INSET = 48; // the legend pill's strip at the bottom of the globe panel
 
 const WEEKDAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
@@ -48,6 +52,10 @@ export function RouteView({
   onGlobeSettled,
 }: Props) {
   const [globeFailed, setGlobeFailed] = useState(false);
+  const reduceMotion = useReducedMotion();
+  const [panelWidth, setPanelWidth] = useState(0);
+  // Where the stops landed on screen, reported by the globe once it settles.
+  const [screen, setScreen] = useState<ScreenPoint[] | null>(null);
   // Memoized on the legs' modes so the globe doesn't rebuild when a flight is picked.
   const modes = legs.map((l) => l.mode).join(",");
   // biome-ignore lint/correctness/useExhaustiveDependencies: rebuild only when modes change
@@ -57,7 +65,11 @@ export function RouteView({
   return (
     <ScrollView className="flex-1" contentContainerClassName="pb-6">
       {globeFailed ? null : (
-        <View style={{ height: 300 }} className="border-b border-line">
+        <View
+          style={{ height: GLOBE_HEIGHT }}
+          className="border-b border-line"
+          onLayout={(e) => setPanelWidth(e.nativeEvent.layout.width)}
+        >
           <SafeGlobe
             variant="overview"
             focus={globe.focus}
@@ -65,21 +77,31 @@ export function RouteView({
             arcs={globe.arcs}
             durationMs={1600}
             frozenAt={globeFrozenAt}
+            ambient={!reduceMotion}
+            onProjectPoints={setScreen}
             onDone={onGlobeSettled}
             onFail={() => setGlobeFailed(true)}
           />
-          <View className="absolute bottom-3 left-5 right-5 flex-row flex-wrap gap-x-3 gap-y-1">
-            {[trip.origin.city, ...trip.stops.map((s) => s.city)].map((city, i) => (
-              <Text key={city} className="font-body-semibold text-xs text-muted">
-                <Text style={{ color: i === 0 ? colors.gold : colors.accent }}>● </Text>
-                {city}
-              </Text>
-            ))}
+          {screen && panelWidth > 0 ? (
+            <StopLabels
+              points={globe.points}
+              screen={screen}
+              width={panelWidth}
+              height={GLOBE_HEIGHT}
+              bottomInset={LEGEND_INSET}
+            />
+          ) : null}
+          <View
+            pointerEvents="none"
+            className="absolute bottom-3 left-4 flex-row items-center gap-3.5 rounded-full border border-line bg-bg/85 px-3.5 py-1.5"
+          >
+            <LegendDot color={colors.gold} label="Home" />
+            <LegendDot color={colors.accent} label={trip.stops.length > 1 ? "Stops" : "Stop"} />
+            {legs.some((l) => l.mode === "fly") ? (
+              <LegendLine color={colors.accent} label="Flight" />
+            ) : null}
             {legs.some((l) => l.mode === "drive") ? (
-              <Text className="font-body-semibold text-xs text-muted">
-                <Text style={{ color: DRIVE_ARC_COLOR }}>━ </Text>
-                Drive
-              </Text>
+              <LegendLine color={DRIVE_ARC_COLOR} label="Drive" />
             ) : null}
           </View>
         </View>
@@ -132,5 +154,23 @@ export function RouteView({
         })}
       </View>
     </ScrollView>
+  );
+}
+
+function LegendDot({ color, label }: { color: string; label: string }) {
+  return (
+    <View className="flex-row items-center gap-1.5">
+      <View style={{ width: 9, height: 9, borderRadius: 5, backgroundColor: color }} />
+      <Text className="font-body-semibold text-[13px] text-ink">{label}</Text>
+    </View>
+  );
+}
+
+function LegendLine({ color, label }: { color: string; label: string }) {
+  return (
+    <View className="flex-row items-center gap-1.5">
+      <View style={{ width: 14, height: 3, borderRadius: 2, backgroundColor: color }} />
+      <Text className="font-body-semibold text-[13px] text-ink">{label}</Text>
+    </View>
   );
 }

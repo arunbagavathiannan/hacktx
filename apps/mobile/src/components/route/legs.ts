@@ -49,8 +49,20 @@ export function globeRoute(trip: Trip, legs: LegPlan[]) {
     ...trip.stops.map((s) => [s.city, { lat: s.lat, lng: s.lng }] as const),
   ]);
   const points: GlobePoint[] = [
-    { kind: "origin", lat: trip.origin.lat, lng: trip.origin.lng },
-    ...trip.stops.map((s) => ({ kind: "stop" as const, lat: s.lat, lng: s.lng })),
+    {
+      kind: "origin",
+      lat: trip.origin.lat,
+      lng: trip.origin.lng,
+      code: trip.origin.airport,
+      name: trip.origin.city,
+    },
+    ...trip.stops.map((s) => ({
+      kind: "stop" as const,
+      lat: s.lat,
+      lng: s.lng,
+      code: s.airport,
+      name: s.city,
+    })),
   ];
   // A return leg over the same path and mode (fly Denver -> Austin) would redraw the same
   // arc. Fly out + drive back keeps both.
