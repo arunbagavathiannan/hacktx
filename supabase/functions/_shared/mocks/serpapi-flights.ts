@@ -126,7 +126,24 @@ export const serpapiFlightsAusDen = {
   ],
 };
 
-export type SerpapiFlightsResponse = typeof serpapiFlightsAusDen;
-export type SerpapiFlight = SerpapiFlightsResponse["best_flights"][number] & {
-  layovers?: { duration: number; name: string; id: string }[];
-};
+// Fields the tool reads. Live results have more, and some may be missing.
+export interface SerpapiFlight {
+  flights: {
+    departure_airport: { id: string; time: string };
+    arrival_airport: { id: string; time: string };
+    airline: string;
+    flight_number?: string;
+  }[];
+  total_duration: number;
+  price?: number;
+  airline_logo?: string;
+  // Round trips: departure_token gets the return flights; their booking_token gets sellers.
+  departure_token?: string;
+  booking_token?: string;
+}
+
+export interface FlightsResponse {
+  best_flights?: SerpapiFlight[];
+  other_flights?: SerpapiFlight[];
+  search_metadata?: { google_flights_url?: string };
+}

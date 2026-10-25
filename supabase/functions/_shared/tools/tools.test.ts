@@ -1,8 +1,10 @@
 // Runs the demo path's tool calls in order against an in-memory store.
-// deno test supabase/functions/_shared/tools/
+// deno test --allow-env supabase/functions/_shared/tools/
 
 import { assert, assertEquals, assertMatch } from "jsr:@std/assert@1";
+import { FakeTime } from "jsr:@std/testing@1/time";
 import { demoChat } from "../mocks/demo-trip.ts";
+import { ENGINE_TIMEOUT_MS } from "../serpapi.ts";
 import { runTool } from "./index.ts";
 import { memoryStore } from "./store.ts";
 import type { Plan, ToolContext } from "./types.ts";
@@ -86,14 +88,16 @@ Deno.test("demo path: extract → search → pin → poll → tally → book", a
   assert(tally.ok, tally.summary);
   assertMatch(tally.summary, /wins with 2 of 3 votes$/);
   assertEquals(store.options.filter((o) => o.category === "hotel" && o.isSelected).length, 1);
-  assertEquals(plan.status, "ready");
+  // Not ready yet: only the agent loop marks it ready, after the verifier passes.
+  assertEquals(plan.status, "voting");
+  assertEquals((tally.data as { all_polls_decided: boolean }).all_polls_decided, true);
 
   const hotel = store.options.find((o) => o.isSelected) ?? store.options[0];
 
   // Guardrail: no booking until the user taps Book.
   const early = await call("book", { refs: ["flight_1", hotel.ref] });
   assert(!early.ok);
-  assertEquals(plan.status, "ready");
+  assertEquals(plan.status, "voting");
 
   ctx.bookingConfirmed = true;
   const booked = await call("book", { refs: ["flight_1", hotel.ref] });
@@ -128,4 +132,132 @@ Deno.test("bad calls come back as friendly failures, not crashes", async () => {
     assert(!res.ok, `expected failure: ${res.summary}`);
     assert(res.summary.length > 0);
   }
+});
+
+// A stand-in for Muse Spark that answers extract_trip with `reply` (or throws).
+const extractor = (reply: string | Error) => ({
+  name: "stub",
+  calls: 0,
+  async complete() {
+    this.calls++;
+    if (reply instanceof Error) throw reply;
+    return { role: "assistant" as const, content: reply };
+  },
+});
+
+Deno.test("extract_trip reads any trip from the chat with Muse Spark", async () => {
+  const { plan, ctx, call } = setup();
+  ctx.chat = [
+    { sender: "Maya", text: "nashville for spring break??", sentAt: "2026-10-24T18:00:00Z" },
+    { sender: "Jo", text: "march 13-15, keep it under 400", sentAt: "2026-10-24T18:01:00Z" },
+  ];
+  ctx.home = { city: "Austin", airport: "AUS" };
+  ctx.model = extractor(
+    'Sure! {"origin":null,"destination":{"city":"Nashville","airport":"bna","lat":36.16,"lng":-86.78},' +
+      '"startDate":"2027-03-13","endDate":"2027-03-15","people":["Maya","Jo"],' +
+      '"budgetPerPersonUsd":400,"constraints":["Spring break"],"missing":[]}',
+  );
+  const res = await call("extract_trip");
+
+  assert(res.ok, res.summary);
+  assertEquals(res.summary, "Nashville · 3 people · Mar 13–15 · $400 each");
+  assertEquals(plan.title, "Nashville weekend");
+  assertEquals(plan.trip.destination?.airport, "BNA");
+  assertEquals(plan.trip.origin, { city: "Austin", airport: "AUS" }); // home base
+  assertEquals(plan.trip.people, ["Sidd", "Maya", "Jo"]); // owner always included
+  assertEquals(plan.trip.missing, []);
+});
+
+Deno.test("extract_trip lists what the chat didn't settle, and drops bad fields", async () => {
+  const { plan, ctx, call } = setup();
+  ctx.model = extractor(
+    '{"destination":{"city":"Chicago","airport":"ORD1"},"startDate":"next friday",' +
+      '"endDate":"2027-01-10","budgetPerPersonUsd":-5,"missing":["dates","vibes"]}',
+  );
+  const res = await call("extract_trip");
+
+  assert(res.ok, res.summary);
+  assertEquals(plan.trip.destination?.city, "Chicago");
+  assertEquals(plan.trip.destination?.airport, undefined); // not a 3-letter code
+  assertEquals(plan.trip.startDate, undefined); // not a date
+  assertEquals(plan.trip.budgetPerPersonUsd, undefined);
+  assertEquals(plan.trip.missing, ["dates"]);
+  assertEquals(res.summary, "Chicago · 4 people · dates TBD");
+});
+
+Deno.test("extract_trip with no destination asks instead of guessing Denver", async () => {
+  const { plan, ctx, call } = setup();
+  ctx.model = extractor('{"destination":null,"people":["Sam"],"missing":[]}');
+  const res = await call("extract_trip");
+
+  assert(res.ok, res.summary);
+  assertEquals(plan.trip.destination, undefined);
+  assertEquals(plan.trip.missing.sort(), ["dates", "destination"]);
+  assertEquals(plan.title, "New trip");
+});
+
+Deno.test("extract_trip reports a Muse Spark failure once, no retry, no fake Denver", async () => {
+  const { plan, ctx, call } = setup();
+  const model = extractor(new Error("503"));
+  ctx.model = model;
+  const res = await call("extract_trip");
+
+  assert(!res.ok);
+  assertEquals(model.calls, 1);
+  assertEquals(plan.trip.destination, undefined);
+});
+
+Deno.test("extract_trip waits for a slow Muse Spark reply (past the 8 s default)", async () => {
+  using time = new FakeTime();
+  const { plan, ctx, call } = setup();
+  ctx.model = {
+    name: "slow",
+    complete: () =>
+      new Promise((resolve) =>
+        setTimeout(
+          () =>
+            resolve({
+              role: "assistant",
+              content:
+                '{"destination":{"city":"Nashville","airport":"BNA"},' +
+                '"startDate":"2026-12-04","endDate":"2026-12-06","people":["Maya"]}',
+            }),
+          12_000,
+        ),
+      ),
+  };
+  const pending = call("extract_trip");
+  await time.tickAsync(12_000);
+  const res = await pending;
+
+  assert(res.ok, res.summary);
+  assertEquals(plan.trip.destination?.city, "Nashville");
+});
+
+Deno.test("search_flights still gives up, just after its longer Flights limit", async () => {
+  using time = new FakeTime();
+  const { ctx, call } = setup();
+  // A search that never answers.
+  ctx.store = { ...ctx.store, getPlan: () => new Promise(() => {}) };
+  const pending = call("search_flights", {
+    origin: "AUS",
+    destination: "DEN",
+    outbound_date: "2026-11-20",
+    return_date: "2026-11-22",
+  });
+  await time.tickAsync(ENGINE_TIMEOUT_MS.google_flights + 3_000);
+  const res = await pending;
+
+  assert(!res.ok);
+  assertMatch(res.summary, /took too long/);
+});
+
+Deno.test("each search tool allows more time than its SerpAPI engine", async () => {
+  const { tools } = await import("./index.ts");
+  const limit = (name: string) => tools.find((t) => t.name === name)?.timeoutMs ?? 8_000;
+  assert(limit("search_flights") > ENGINE_TIMEOUT_MS.google_flights);
+  assert(limit("search_hotels") > ENGINE_TIMEOUT_MS.google_hotels);
+  assert(limit("search_places") > ENGINE_TIMEOUT_MS.google_maps);
+  // book can make two Flights lookups in a row.
+  assert(limit("book") > 2 * ENGINE_TIMEOUT_MS.google_flights);
 });
