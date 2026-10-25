@@ -12,7 +12,7 @@ import {
 import { DestinationGlobe } from "@/components/destinations/DestinationGlobe";
 import { prefetchMapTiles } from "@/components/map/MapCanvas";
 import { gasPerPerson, planLegs } from "@/components/route/legs";
-import { AvatarStack, Button, Display, IconButton, Label, Muted } from "@/components/ui";
+import { AvatarStack, Button, IconButton, Label, Muted, Title } from "@/components/ui";
 import { brief } from "@/mocks";
 import { destinationSuggestions, leadingDestination } from "@/mocks/destinations";
 import { defaultEstimateFor, defaultPicksFor, useDriving, usePlan } from "@/store/plan";
@@ -96,9 +96,7 @@ export default function Destinations() {
           onPress={() => (router.canGoBack() ? router.back() : router.replace("/plan/summary"))}
         />
         <View className="flex-1">
-          <Display accessibilityRole="header" className="text-[30px] leading-9">
-            Where to?
-          </Display>
+          <Title accessibilityRole="header">Where to?</Title>
           <Muted numberOfLines={1}>
             {choices.length} ideas
             {allFit ? ` · all under $${brief.budgetPerPerson}` : ""}
@@ -128,7 +126,7 @@ export default function Destinations() {
         </View>
       )}
 
-      <ScrollView className="flex-1" contentContainerClassName="gap-5 px-5 pb-6 pt-5">
+      <ScrollView className="flex-1" contentContainerClassName="gap-8 px-5 pb-6 pt-5">
         {selected ? (
           <DestinationTicket
             choice={selected}
@@ -138,7 +136,7 @@ export default function Destinations() {
           />
         ) : null}
         <View accessibilityRole="radiogroup" accessibilityLabel="Destination ideas">
-          <Label className="pb-1">Pick one for the group</Label>
+          <Label className="pb-2">Pick one for the group</Label>
           {choices.map((c) => (
             <DestinationRow
               key={c.destination.id}

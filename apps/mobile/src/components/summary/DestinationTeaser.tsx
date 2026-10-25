@@ -18,10 +18,10 @@ export function DestinationTeaser({ ideas, budgetPerPerson }: Props) {
         .join("; ")}`}
       className="gap-1"
     >
-      <Text className="font-display text-xl leading-7 text-ink">
+      <Text className="font-display text-title text-ink">
         {ideas.length} destination ideas ready
       </Text>
-      <Text className="font-body text-sm leading-5 text-muted">
+      <Text className="font-body text-small leading-5 text-muted">
         {allFit
           ? `All fit $${budgetPerPerson} each. The group picks one next.`
           : "The group picks one next."}
@@ -30,13 +30,13 @@ export function DestinationTeaser({ ideas, budgetPerPerson }: Props) {
         {ideas.map(({ destination: d, perPerson }) => (
           <View key={d.id} className="flex-row items-center gap-3 border-b border-line py-3">
             <View className="flex-1 gap-0.5">
-              <Text className="font-body-semibold text-base text-ink">{d.city}</Text>
-              <Text numberOfLines={1} className="font-body text-sm text-muted">
+              <Text className="font-body-semibold text-body text-ink">{d.city}</Text>
+              <Text numberOfLines={1} className="font-body text-small text-muted">
                 {d.why}
               </Text>
             </View>
             <Text
-              className="font-body-bold text-base text-ink"
+              className="font-body-bold text-body text-ink"
               style={{ fontVariant: ["tabular-nums"] }}
             >
               ~${perPerson}
