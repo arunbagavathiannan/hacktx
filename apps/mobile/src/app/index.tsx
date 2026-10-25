@@ -31,7 +31,7 @@ export default function Home() {
             onPress={() => {
               // Live mode: every run starts from an empty chat.
               if (LIVE) useLive.getState().reset();
-              router.push("/plan/incoming");
+              router.push({ pathname: "/plan/incoming", params: { run: String(Date.now()) } });
             }}
           />
         </View>

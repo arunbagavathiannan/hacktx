@@ -96,6 +96,15 @@ export default function Incoming() {
   const [scripted, setScripted] = useState(false);
   const demoTimers = useRef<ReturnType<typeof setTimeout>[]>([]);
   useEffect(() => () => demoTimers.current.forEach(clearTimeout), []);
+  // A new simulation (Home resets the live chat): start this screen over too.
+  useEffect(() => {
+    if (!LIVE || liveMessages.length > 0) return;
+    demoTimers.current.forEach(clearTimeout);
+    demoTimers.current = [];
+    setScripted(false);
+    setBanner("hidden");
+    arrived.current = false;
+  }, [liveMessages.length]);
   const playDemo = () => {
     setScripted(true);
     let at = 0;
