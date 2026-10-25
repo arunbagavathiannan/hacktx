@@ -82,7 +82,7 @@ Phosphor regular weight and add a loading skeleton`.
 
 ## 5. A human merges
 
-- Check the PR has **screenshots** (UI) or a **diagram** (backend), and the **check output**.
+- Check the PR has **screenshots** (UI) or a **diagram** (for backend), and the **check output**.
 - CI must be green.
 - PRs that touch protected files need Arun's or Villy's approval. Everything else can be
   merged by a teammate after checking.

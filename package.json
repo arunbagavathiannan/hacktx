@@ -8,6 +8,8 @@
   },
   "scripts": {
     "mobile": "pnpm --filter mobile start",
+    "go": "pnpm --filter mobile go",
+    "go:tunnel": "pnpm --filter mobile go:tunnel",
     "android": "pnpm --filter mobile android",
     "web": "pnpm --filter web dev",
     "format": "biome format",

@@ -88,7 +88,7 @@ export default function Booked() {
       <View className="items-center gap-4 pt-6">
         <View className="h-24 w-24 items-center justify-center">
           <Confetti />
-          <Animated.View entering={ZoomIn.springify().damping(12)}>
+          <Animated.View entering={ZoomIn.duration(300)}>
             <View className="h-20 w-20 items-center justify-center rounded-full border border-accent/40 bg-accent-soft">
               <SealCheck size={44} color={colors.accent} weight="fill" />
             </View>

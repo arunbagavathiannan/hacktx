@@ -1,11 +1,10 @@
 import { Redirect, router, useLocalSearchParams } from "expo-router";
 import { ChatsCircle, GearSix, Sparkle } from "phosphor-react-native";
-import { View } from "react-native";
 import { IconButton } from "@/components/home/IconButton";
 import { PastPlans } from "@/components/home/PastPlans";
 import { PlanCard } from "@/components/home/PlanCard";
 import { Button, Label, Muted, Screen, Title } from "@/components/ui";
-import { usePreferences, usePreferencesHydrated } from "@/store/preferences";
+import { usePreferences } from "@/store/preferences";
 import { colors, icon } from "@/theme";
 
 // Home: the plans Huddle spotted in your chats. In the demo, the plan starts from the
@@ -14,9 +13,7 @@ export default function Home() {
   // MOCK: `?demo=home` skips the first-run redirect so a fresh browser (PR screenshots)
   // lands here instead of onboarding.
   const isDemo = useLocalSearchParams<{ demo?: string }>().demo === "home";
-  const hydrated = usePreferencesHydrated();
   const onboarded = usePreferences((s) => s.onboarded);
-  if (!isDemo && !hydrated) return <View className="flex-1 bg-bg" />;
   if (!isDemo && !onboarded) return <Redirect href="/onboarding" />;
 
   return (

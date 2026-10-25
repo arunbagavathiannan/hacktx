@@ -57,6 +57,8 @@
   },
   "scripts": {
     "start": "expo start",
+    "go": "expo start --go",
+    "go:tunnel": "expo start --go --tunnel",
     "android": "expo run:android",
     "web": "expo start --web",
     "export:web": "expo export --platform web",
