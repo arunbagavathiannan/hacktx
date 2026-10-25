@@ -1,0 +1,87 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Huddle Devpost Cover</title>
+<!--
+  System (from DESIGN.md, "The Ticket Stub"):
+  - Canvas 1200x630, bg #0B0A09, one sunset accent #FF7A3D; gradient only on the ticket head
+    (here: the real share card from the app).
+  - Type: Bricolage Grotesque 700 for the wordmark and the one display line, Manrope for the rest.
+  - Real assets only: phone = Expo web build of /plan/map?demo=map, ticket = /plan/booked?demo=card.
+  - Overlays (phone, ticket) are the only things with shadows.
+  Render: npx -y playwright@1.64.0 screenshot --browser chromium --viewport-size "1200,630"
+          --wait-for-timeout 1500 file:///.../devpost-cover.html devpost-cover.png
+-->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700&family=Manrope:wght@400;500;600;700&display=block" rel="stylesheet">
+<link rel="stylesheet" href="https://unpkg.com/@phosphor-icons/web@2.1.1/src/fill/style.css">
+<style>
+  :root {
+    --bg: #0B0A09; --surface: #161412; --raised: #201D1A; --line: #2C2824;
+    --ink: #F5F1EC; --muted: #A39B91; --faint: #8F877D;
+    --accent: #FF7A3D; --accent-soft: #3A2216; --gold: #FFB547;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { width: 1200px; height: 630px; overflow: hidden; background: var(--bg); }
+  body { font-family: "Manrope", sans-serif; color: var(--ink); position: relative; }
+
+  .copy { position: absolute; left: 72px; top: 64px; width: 560px; }
+  .brand { display: flex; align-items: center; gap: 14px; }
+  .glyph {
+    width: 44px; height: 44px; border-radius: 12px; background: var(--accent);
+    display: grid; place-items: center; color: var(--bg); font-size: 28px;
+  }
+  .wordmark { font-family: "Bricolage Grotesque", sans-serif; font-weight: 700; font-size: 34px; letter-spacing: -0.6px; }
+
+  h1 {
+    margin-top: 72px;
+    font-family: "Bricolage Grotesque", sans-serif; font-weight: 700;
+    font-size: 72px; line-height: 74px; letter-spacing: -2px; text-wrap: balance;
+  }
+  h1 em { font-style: normal; color: var(--accent); }
+  .lede { margin-top: 24px; font-size: 21px; line-height: 31px; color: var(--muted); max-width: 500px; text-wrap: pretty; }
+
+  .foot {
+    position: absolute; left: 72px; bottom: 56px; display: flex; gap: 20px;
+    font-size: 15px; font-weight: 600; color: var(--faint);
+  }
+  .foot span + span::before { content: ""; display: inline-block; width: 4px; height: 4px; border-radius: 2px; background: var(--line); margin: 0 20px 3px 0; vertical-align: middle; }
+
+  /* The phone: a plain bezel around the real map screen, bleeding off the bottom edge. */
+  .phone {
+    position: absolute; left: 812px; top: 52px; width: 330px; height: 700px;
+    border-radius: 48px; background: #050404; padding: 10px;
+    box-shadow: 0 0 0 1.5px var(--line), 0 30px 60px rgba(0,0,0,.6);
+  }
+  .screen {
+    width: 100%; height: 100%; border-radius: 39px; overflow: hidden;
+    background: var(--bg) url("plan-map-demo-map.png") top center / 100% auto no-repeat;
+  }
+
+  /* The ticket: the app's real share card, cropped out of the Booked screen. */
+  .ticket {
+    position: absolute; left: 664px; top: 262px; width: 252px; height: 315px;
+    border-radius: 21px; overflow: hidden; transform: rotate(-5deg);
+    background: url("plan-booked-demo-card.png") -20.25px -161.25px / 292.5px auto no-repeat;
+    box-shadow: 0 24px 48px rgba(0,0,0,.6), 0 2px 6px rgba(0,0,0,.4);
+  }
+</style>
+</head>
+<body>
+  <div class="copy">
+    <div class="brand">
+      <div class="glyph"><i class="ph-fill ph-chats-circle"></i></div>
+      <div class="wordmark">Huddle</div>
+    </div>
+    <h1>Take the plans out of the <em>GC.</em></h1>
+    <p class="lede">Huddle spots a trip taking shape in your group chat, plans it with an AI agent, and gives the group one ticket to say yes to.</p>
+  </div>
+
+  <div class="foot"><span>HackTX '26</span><span>Android</span><span>Meta Muse Spark + SerpAPI tracks</span></div>
+
+  <div class="phone"><div class="screen"></div></div>
+  <div class="ticket" role="img" aria-label="Huddle share card for a Denver trip"></div>
+</body>
+</html>
