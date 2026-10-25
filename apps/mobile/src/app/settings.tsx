@@ -1,5 +1,6 @@
 import { router, useLocalSearchParams } from "expo-router";
 import {
+  ArrowCounterClockwise,
   BellRinging,
   CaretLeft,
   Compass,
@@ -11,13 +12,14 @@ import {
   Sparkle,
   Wallet,
 } from "phosphor-react-native";
+import { useState } from "react";
 import { Pressable, Text, View } from "react-native";
 import { IconButton } from "@/components/home/IconButton";
 import { budgetOptions } from "@/components/onboarding/options";
-import { ResetDemo } from "@/components/settings/ResetDemo";
+import { ResetConfirm } from "@/components/settings/ResetDemo";
 import { SettingRow } from "@/components/settings/SettingRow";
 import { demoPrefs } from "@/components/summary/personalize";
-import { Badge, Card, Label, Muted, Screen, Title } from "@/components/ui";
+import { Button, Card, Label, Muted, Screen, Title } from "@/components/ui";
 import type { Preferences } from "@/mocks/types";
 import { usePlan } from "@/store/plan";
 import { usePreferences, usePreferencesHydrated } from "@/store/preferences";
@@ -51,6 +53,7 @@ export default function Settings() {
   const maxTravel = usePreferences((s) => s.maxTravel);
   const prefs: Preferences =
     demo === "prefs" || demo === "reset" ? demoPrefs : { vibes, budget, food, maxTravel };
+  const [confirming, setConfirming] = useState(demo === "reset");
 
   if (!hydrated) return <View className="flex-1 bg-bg" />;
 
@@ -72,7 +75,15 @@ export default function Settings() {
   ];
 
   return (
-    <Screen scroll className="gap-6">
+    <Screen
+      scroll
+      className="gap-6"
+      footer={
+        confirming ? (
+          <ResetConfirm onCancel={() => setConfirming(false)} onConfirm={resetDemo} />
+        ) : undefined
+      }
+    >
       <View className="flex-row items-center gap-3 pt-3">
         <IconButton icon={CaretLeft} label="Back" onPress={goBack} />
         <Title accessibilityRole="header">Settings</Title>
@@ -112,12 +123,13 @@ export default function Settings() {
           <SettingRow
             first
             icon={BellRinging}
-            title="Notification access"
-            detail="Connect WhatsApp & Instagram"
-            right={<Badge label="Soon" />}
+            title="Coming soon"
+            detail="Read WhatsApp & Instagram on Android"
           />
         </Card>
-        <Muted className="px-1">Android only, coming with the notification listener.</Muted>
+        <Muted className="px-1">
+          Arrives with the Android notification listener. Nothing to set up here yet.
+        </Muted>
       </View>
 
       <View className="gap-3">
@@ -134,7 +146,12 @@ export default function Settings() {
 
       <View className="gap-3">
         <Label>Demo</Label>
-        <ResetDemo onConfirm={resetDemo} initiallyOpen={demo === "reset"} />
+        <Button
+          label="Reset demo"
+          variant="secondary"
+          icon={<ArrowCounterClockwise size={20} color={colors.ink} weight={icon.weight} />}
+          onPress={() => setConfirming(true)}
+        />
       </View>
     </Screen>
   );

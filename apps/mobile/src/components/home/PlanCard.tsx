@@ -1,4 +1,4 @@
-import { CaretRight, CheckCircle, Sparkle } from "phosphor-react-native";
+import { CaretRight, Sparkle, UsersThree } from "phosphor-react-native";
 import { Pressable, View } from "react-native";
 import { AvatarStack, Badge, Heading, Muted } from "@/components/ui";
 import { estimatePerPerson, groupSize, nightsBetween } from "@/lib/pricing";
@@ -8,7 +8,8 @@ import { colors, icon } from "@/theme";
 
 const appName = { whatsapp: "WhatsApp", instagram: "Instagram" } as const;
 
-// The plan Huddle spotted in the group chat. Tapping it reopens the trip summary.
+// The trip Huddle spotted in the group chat. Tapping it opens the trip summary.
+// Neutral copy: it never claims the plan is done before the demo runs the agent.
 export function PlanCard({ onPress }: { onPress: () => void }) {
   const picks = usePlan((s) => s.picks);
   const people = groupSize(trip);
@@ -19,7 +20,7 @@ export function PlanCard({ onPress }: { onPress: () => void }) {
     nights: nightsBetween(trip.dates.start, trip.dates.end),
   });
   const status = [
-    picks.length > 0 ? "Plan ready" : "Nothing picked yet",
+    `Spotted in ${trip.sourceChat.name}`,
     `${people} ${people === 1 ? "person" : "people"}`,
     perPerson > 0 ? `~$${perPerson} each` : null,
   ]
@@ -29,16 +30,13 @@ export function PlanCard({ onPress }: { onPress: () => void }) {
   return (
     <Pressable
       accessibilityRole="button"
-      accessibilityLabel={`${trip.title}, ${trip.dates.label}. ${status}. Open plan`}
+      accessibilityLabel={`${trip.title}, ${trip.dates.label}. ${status}. Review plan`}
       onPress={onPress}
       className="rounded-card border border-line bg-surface active:opacity-80"
     >
       <View className="gap-3 p-4">
         <View className="flex-row items-center justify-between">
-          <Badge
-            label={`${trip.sourceChat.name} · ${appName[trip.sourceChat.app]}`}
-            tone="accent"
-          />
+          <Badge label={`From ${appName[trip.sourceChat.app]}`} tone="accent" />
           <CaretRight size={18} color={colors.muted} weight={icon.weight} />
         </View>
         <View className="flex-row items-end gap-3">
@@ -54,11 +52,7 @@ export function PlanCard({ onPress }: { onPress: () => void }) {
         </View>
       </View>
       <View className="flex-row items-center gap-3 border-t border-line px-4 py-3">
-        <CheckCircle
-          size={18}
-          color={picks.length > 0 ? colors.good : colors.faint}
-          weight={icon.activeWeight}
-        />
+        <UsersThree size={18} color={colors.muted} weight={icon.weight} />
         <Muted className="flex-1 font-body-semibold text-ink">{status}</Muted>
       </View>
     </Pressable>

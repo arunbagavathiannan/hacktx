@@ -87,7 +87,7 @@ export default function Onboarding() {
             />
           ) : null}
           <Button
-            label={step === last ? (editing ? "Save" : "Let's go") : "Next"}
+            label={step === last ? (editing ? "Done" : "Let's go") : "Next"}
             icon={
               step === last ? (
                 <Check size={20} color={colors.bg} weight={icon.weight} />

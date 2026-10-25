@@ -37,7 +37,7 @@ export default function Home() {
       <View className="gap-3">
         <View className="gap-1">
           <Label>Spotted in your chats</Label>
-          <Muted>Huddle picked this up from your group chat and planned it.</Muted>
+          <Muted>Huddle noticed this trip in your group chat. Tap to review it.</Muted>
         </View>
         <PlanCard onPress={() => router.push("/plan/summary")} />
       </View>
