@@ -25,6 +25,15 @@ const CARD_WIDTH = 336;
 const CARD_HEIGHT = 420;
 const SKY = 158;
 const MAX_ROWS = 4;
+// Room for the city name: card width minus the px-6 padding on both sides.
+const TITLE_WIDTH = CARD_WIDTH - 48;
+
+// Big for short names ("Denver"), smaller so long ones ("New Orleans") still fit on one line.
+// 0.62em is roughly Bricolage Grotesque Bold's average letter width.
+function cityTitleStyle(city: string) {
+  const fontSize = Math.min(52, Math.floor(TITLE_WIDTH / (city.length * 0.62)));
+  return { fontSize, lineHeight: Math.round(fontSize * 1.08) };
+}
 
 type Row = { key: string; kind: PlaceCategory | "flight"; title: string; when: string };
 
@@ -135,7 +144,12 @@ export function ShareCard({ trip, itinerary, ref }: Props) {
               <Text className="font-body-bold text-[11px] uppercase tracking-[2.5px] text-bg/70">
                 {trip.sourceChat.name} · {shortDates(trip)}
               </Text>
-              <Text className="font-display text-[52px] leading-[56px] text-bg">
+              <Text
+                numberOfLines={1}
+                adjustsFontSizeToFit
+                className="font-display text-bg"
+                style={cityTitleStyle(trip.destination.city)}
+              >
                 {trip.destination.city}
               </Text>
             </View>
