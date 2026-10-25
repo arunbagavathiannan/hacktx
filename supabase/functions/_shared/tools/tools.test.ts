@@ -2,6 +2,7 @@
 // deno test --allow-env supabase/functions/_shared/tools/
 
 import { assert, assertEquals, assertMatch } from "jsr:@std/assert@1";
+import { FakeTime } from "jsr:@std/testing@1/time";
 import { demoChat } from "../mocks/demo-trip.ts";
 import { runTool } from "./index.ts";
 import { memoryStore } from "./store.ts";
@@ -203,4 +204,49 @@ Deno.test("extract_trip reports a Muse Spark failure once, no retry, no fake Den
   assert(!res.ok);
   assertEquals(model.calls, 1);
   assertEquals(plan.trip.destination, undefined);
+});
+
+Deno.test("extract_trip waits for a slow Muse Spark reply (past the 8 s default)", async () => {
+  using time = new FakeTime();
+  const { plan, ctx, call } = setup();
+  ctx.model = {
+    name: "slow",
+    complete: () =>
+      new Promise((resolve) =>
+        setTimeout(
+          () =>
+            resolve({
+              role: "assistant",
+              content:
+                '{"destination":{"city":"Nashville","airport":"BNA"},' +
+                '"startDate":"2026-12-04","endDate":"2026-12-06","people":["Maya"]}',
+            }),
+          12_000,
+        ),
+      ),
+  };
+  const pending = call("extract_trip");
+  await time.tickAsync(12_000);
+  const res = await pending;
+
+  assert(res.ok, res.summary);
+  assertEquals(plan.trip.destination?.city, "Nashville");
+});
+
+Deno.test("search tools keep the short 8 s limit", async () => {
+  using time = new FakeTime();
+  const { ctx, call } = setup();
+  // A search that never answers.
+  ctx.store = { ...ctx.store, getPlan: () => new Promise(() => {}) };
+  const pending = call("search_flights", {
+    origin: "AUS",
+    destination: "DEN",
+    outbound_date: "2026-11-20",
+    return_date: "2026-11-22",
+  });
+  await time.tickAsync(8_000);
+  const res = await pending;
+
+  assert(!res.ok);
+  assertMatch(res.summary, /took too long/);
 });

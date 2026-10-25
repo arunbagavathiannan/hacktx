@@ -1,5 +1,5 @@
 import { demoTrip } from "../mocks/demo-trip.ts";
-import { parseJsonReply } from "../muse.ts";
+import { MUSE_TIMEOUT_MS, parseJsonReply } from "../muse.ts";
 import { defineTool } from "./helpers.ts";
 import { type Place, type ToolContext, ToolError, type Trip } from "./types.ts";
 
@@ -82,6 +82,9 @@ export const extractTrip = defineTool<Record<string, never>>({
     "`missing`; if it isn't empty, ask the group with ask_user.",
   parameters: { type: "object", properties: {}, additionalProperties: false },
   describe: () => "Reading the chat",
+  // A Muse Spark call returning a whole trip can take well over runTool's 8 s default.
+  // Outlast the model call's own timeout so its result (or its error) is what we see.
+  timeoutMs: MUSE_TIMEOUT_MS + 5_000,
   async run(_args, ctx) {
     let trip: Trip;
     if (ctx.model) {

@@ -29,7 +29,9 @@ export interface ChatModel {
   complete(req: CompletionRequest): Promise<AssistantMessage>;
 }
 
-const TIMEOUT_MS = 20_000;
+// How long one Muse Spark call may take. Tools that call the model set their own limit
+// above this (runTool's default is 8 s).
+export const MUSE_TIMEOUT_MS = 20_000;
 
 // The verifier and detector ask for JSON in the prompt (Meta's docs don't confirm
 // response_format on chat completions), so pull the first {...} out of the reply.
@@ -61,7 +63,7 @@ export function museSpark(): ChatModel | null {
           messages,
           ...(tools ? { tools, tool_choice: "auto" } : {}),
         }),
-        signal: AbortSignal.timeout(TIMEOUT_MS),
+        signal: AbortSignal.timeout(MUSE_TIMEOUT_MS),
       });
       if (!res.ok) {
         throw new Error(`Muse Spark ${res.status}: ${(await res.text()).slice(0, 200)}`);
