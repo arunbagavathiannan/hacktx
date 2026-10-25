@@ -1,6 +1,6 @@
 import { type FlightsResponse, serpapiFlightsAusDen } from "../mocks/serpapi-flights.ts";
 import { wantsNonstop } from "../preferences.ts";
-import { liveOrFixture, serpapi } from "../serpapi.ts";
+import { ENGINE_TIMEOUT_MS, liveOrFixture, serpapi } from "../serpapi.ts";
 import {
   addFound,
   clampResults,
@@ -44,6 +44,8 @@ export const searchFlights = defineTool<Args>({
     additionalProperties: false,
   },
   describe: (a) => `Searching flights ${a.origin.toUpperCase()} → ${a.destination.toUpperCase()}`,
+  // Above the engine's own limit, with room to fall back to a fixture.
+  timeoutMs: ENGINE_TIMEOUT_MS.google_flights + 3_000,
   async run(args, ctx) {
     const origin = args.origin.toUpperCase();
     // "Short flight" in onboarding means nonstop unless the model asked otherwise.
@@ -52,6 +54,7 @@ export const searchFlights = defineTool<Args>({
 
     const { data: res, source } = await liveOrFixture<FlightsResponse>(
       "flight",
+      "google_flights",
       () =>
         serpapi("google_flights", {
           departure_id: origin,

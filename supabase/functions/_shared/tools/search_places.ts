@@ -4,7 +4,7 @@ import {
   mapsDenverRestaurants,
 } from "../mocks/serpapi-maps.ts";
 import { foodRestrictions } from "../preferences.ts";
-import { liveOrFixture, serpapi } from "../serpapi.ts";
+import { ENGINE_TIMEOUT_MS, liveOrFixture, serpapi } from "../serpapi.ts";
 import { addFound, clampResults, count, defineTool, forModel, isDemoCity } from "./helpers.ts";
 import type { Option } from "./types.ts";
 
@@ -37,6 +37,8 @@ export const searchPlaces = defineTool<Args>({
   },
   describe: (a) =>
     `Finding ${a.kind === "restaurant" ? "places to eat" : "things to do"} in ${a.location}`,
+  // Above the engine's own limit, with room to fall back to a fixture.
+  timeoutMs: ENGINE_TIMEOUT_MS.google_maps + 3_000,
   async run(args, ctx) {
     // Dietary needs from onboarding go into every restaurant search.
     const diet = args.kind === "restaurant" ? foodRestrictions(ctx.preferences) : [];
@@ -44,6 +46,7 @@ export const searchPlaces = defineTool<Args>({
     const query = missing.length ? `${args.query} ${missing.join(" ")} friendly` : args.query;
     const { data: res, source } = await liveOrFixture<MapsResponse>(
       "places",
+      "google_maps",
       () =>
         serpapi("google_maps", {
           type: "search",

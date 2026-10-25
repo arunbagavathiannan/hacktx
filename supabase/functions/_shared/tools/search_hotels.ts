@@ -1,6 +1,6 @@
 import { type HotelsResponse, serpapiHotelsDenver } from "../mocks/serpapi-hotels.ts";
 import { nightlyCapUsd } from "../preferences.ts";
-import { liveOrFixture, serpapi } from "../serpapi.ts";
+import { ENGINE_TIMEOUT_MS, liveOrFixture, serpapi } from "../serpapi.ts";
 import { addFound, clampResults, count, defineTool, forModel, isDemoCity, usd } from "./helpers.ts";
 import { type Option, ToolError } from "./types.ts";
 
@@ -32,11 +32,14 @@ export const searchHotels = defineTool<Args>({
     additionalProperties: false,
   },
   describe: (a) => `Searching hotels in ${a.location}`,
+  // Above the engine's own limit, with room to fall back to a fixture.
+  timeoutMs: ENGINE_TIMEOUT_MS.google_hotels + 3_000,
   async run(args, ctx) {
     // The owner's budget tier caps the nightly price unless the model set its own cap.
     const cap = args.max_price_per_night ?? nightlyCapUsd(ctx.preferences);
     const { data: res, source } = await liveOrFixture<HotelsResponse>(
       "hotel",
+      "google_hotels",
       () =>
         serpapi("google_hotels", {
           q: `Hotels in ${args.location}`,

@@ -4,6 +4,7 @@
 import { assert, assertEquals, assertMatch } from "jsr:@std/assert@1";
 import { FakeTime } from "jsr:@std/testing@1/time";
 import { demoChat } from "../mocks/demo-trip.ts";
+import { ENGINE_TIMEOUT_MS } from "../serpapi.ts";
 import { runTool } from "./index.ts";
 import { memoryStore } from "./store.ts";
 import type { Plan, ToolContext } from "./types.ts";
@@ -233,7 +234,7 @@ Deno.test("extract_trip waits for a slow Muse Spark reply (past the 8 s default)
   assertEquals(plan.trip.destination?.city, "Nashville");
 });
 
-Deno.test("search tools keep the short 8 s limit", async () => {
+Deno.test("search_flights still gives up, just after its longer Flights limit", async () => {
   using time = new FakeTime();
   const { ctx, call } = setup();
   // A search that never answers.
@@ -244,9 +245,19 @@ Deno.test("search tools keep the short 8 s limit", async () => {
     outbound_date: "2026-11-20",
     return_date: "2026-11-22",
   });
-  await time.tickAsync(8_000);
+  await time.tickAsync(ENGINE_TIMEOUT_MS.google_flights + 3_000);
   const res = await pending;
 
   assert(!res.ok);
   assertMatch(res.summary, /took too long/);
+});
+
+Deno.test("each search tool allows more time than its SerpAPI engine", async () => {
+  const { tools } = await import("./index.ts");
+  const limit = (name: string) => tools.find((t) => t.name === name)?.timeoutMs ?? 8_000;
+  assert(limit("search_flights") > ENGINE_TIMEOUT_MS.google_flights);
+  assert(limit("search_hotels") > ENGINE_TIMEOUT_MS.google_hotels);
+  assert(limit("search_places") > ENGINE_TIMEOUT_MS.google_maps);
+  // book can make two Flights lookups in a row.
+  assert(limit("book") > 2 * ENGINE_TIMEOUT_MS.google_flights);
 });

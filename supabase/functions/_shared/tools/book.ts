@@ -1,3 +1,4 @@
+import { ENGINE_TIMEOUT_MS } from "../serpapi.ts";
 import { liveOffers } from "./booking_offers.ts";
 import { defineTool, usd } from "./helpers.ts";
 import { type BookingOffer, type StoredOption, ToolError } from "./types.ts";
@@ -33,8 +34,9 @@ export const book = defineTool<Args>({
     additionalProperties: false,
   },
   describe: () => "Preparing the booking",
-  // Up to 3 SerpAPI calls (flight returns → flight sellers, hotel prices), partly in parallel.
-  timeoutMs: 20_000,
+  // Up to 3 SerpAPI calls: two Flights lookups in a row (returns → sellers), with the hotel
+  // lookup alongside. Allow both Flights calls their full time.
+  timeoutMs: 2 * ENGINE_TIMEOUT_MS.google_flights + 3_000,
   async run(args, ctx) {
     // Guardrail: the agent proposes, people decide (CLAUDE.md).
     if (!ctx.bookingConfirmed) {

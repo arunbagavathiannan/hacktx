@@ -88,6 +88,35 @@ export function codeChecks(trip: Trip, options: StoredOption[], prefs?: Preferen
   return issues;
 }
 
+export const VERIFIER_TIMEOUT_MS = 35_000;
+
+// The raw search fields the verifier compares against (prices, dates, stops, ratings, food).
+// Descriptions, amenities, tokens and the like stay out of the prompt.
+const CHECKED_DETAILS = [
+  "source",
+  "price",
+  "stops",
+  "outbound_date",
+  "return_date",
+  "departure_time",
+  "total_duration",
+  "rate_per_night",
+  "total_rate",
+  "check_in_date",
+  "check_out_date",
+  "overall_rating",
+  "rating",
+  "type",
+  "address",
+  "dietary",
+];
+
+function pick(details: Record<string, unknown>, keys: string[]) {
+  return Object.fromEntries(
+    keys.filter((k) => details[k] !== undefined).map((k) => [k, details[k]]),
+  );
+}
+
 const SYSTEM = `You are Huddle's verifier. Check a group trip plan before the group sees it.
 Using the chat, the extracted trip and the pinned options, look for: prices or links that
 don't match the search results in "details", dates or people that don't match the chat,
@@ -110,11 +139,13 @@ export async function verify(
 ): Promise<Verdict> {
   const issues = codeChecks(trip, options, prefs);
 
+  // Only what the checks need: a smaller prompt is a faster (and cheaper) Muse Spark call.
+  const { booking: _booking, ...tripFacts } = trip;
   const snapshot = {
     owner,
     preferences: prefs ?? null,
     chat: chat.map((m) => `${m.sender}: ${m.text}`),
-    trip,
+    trip: tripFacts,
     options: options.map(({ ref, category, title, priceCents, url, isSelected, details }) => ({
       ref,
       category,
@@ -122,7 +153,7 @@ export async function verify(
       price_usd: priceCents === undefined ? undefined : priceCents / 100,
       url,
       selected: isSelected,
-      details,
+      details: pick(details, CHECKED_DETAILS),
     })),
     code_issues: issues,
   };
@@ -133,6 +164,8 @@ export async function verify(
         { role: "system", content: SYSTEM },
         { role: "user", content: JSON.stringify(snapshot) },
       ],
+      // Reading a whole plan takes longer than a normal call (20 s timed out live).
+      timeoutMs: VERIFIER_TIMEOUT_MS,
     });
     const parsed = parseJsonReply(reply.content) ?? {};
     for (const issue of Array.isArray(parsed.issues) ? parsed.issues : []) {

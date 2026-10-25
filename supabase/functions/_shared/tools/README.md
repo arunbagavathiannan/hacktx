@@ -41,8 +41,11 @@ No failure turns into a loop of paid calls:
 - **Per run** (`agent/loop.ts`): at most 10 tool calls and 14 Muse Spark calls; an identical
   repeat of a read-only call (`extract_trip`, `search_*`) is answered from cache; a tool that
   fails twice is skipped for the rest of the run. Live calls are never retried.
-- **SerpAPI** (`../serpapi.ts`): after a failure, live calls pause for 60 s (10 min after
-  401 / 403 / 429) and searches use the fixture or fail politely. "No results" doesn't count.
+- **SerpAPI** (`../serpapi.ts`): each engine has its own timeout (Flights 15 s, Hotels 12 s,
+  Maps 8 s; each tool allows 3 s more). A bad key or quota error (401 / 403 / 429) pauses all
+  live calls for 10 min; a server or network error pauses only that engine for 60 s.
+  Timeouts, 400s and "no results" don't pause anything.
+- **Verifier**: its Muse Spark call gets 35 s and only the fields it checks.
 - **detect**: chats with nothing trip-like skip Muse Spark; the same batch within 10 minutes
   reuses the earlier answer.
 - **agent**: a second run of a plan that's already running gets `409`; booking a plan that's

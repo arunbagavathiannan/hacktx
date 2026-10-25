@@ -22,6 +22,8 @@ export interface CompletionRequest {
   messages: LlmMessage[];
   // OpenAI-style tool definitions. Omitted for the detector and the verifier.
   tools?: unknown[];
+  // Overrides MUSE_TIMEOUT_MS for calls that read a lot (the verifier).
+  timeoutMs?: number;
 }
 
 export interface ChatModel {
@@ -54,7 +56,7 @@ export function museSpark(): ChatModel | null {
 
   return {
     name: model,
-    async complete({ messages, tools }) {
+    async complete({ messages, tools, timeoutMs }) {
       const res = await fetch(`${baseUrl.replace(/\/$/, "")}/chat/completions`, {
         method: "POST",
         headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
@@ -63,7 +65,7 @@ export function museSpark(): ChatModel | null {
           messages,
           ...(tools ? { tools, tool_choice: "auto" } : {}),
         }),
-        signal: AbortSignal.timeout(MUSE_TIMEOUT_MS),
+        signal: AbortSignal.timeout(timeoutMs ?? MUSE_TIMEOUT_MS),
       });
       if (!res.ok) {
         throw new Error(`Muse Spark ${res.status}: ${(await res.text()).slice(0, 200)}`);

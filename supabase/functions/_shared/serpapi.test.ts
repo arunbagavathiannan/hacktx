@@ -472,3 +472,73 @@ Deno.test("booking twice doesn't look up offers again", async () => {
   // search + one hotel-prices lookup; the second tap made no calls.
   assertEquals(urls.length, 2);
 });
+
+const stay = (location: string) =>
+  JSON.stringify({ location, check_in_date: "2026-11-20", check_out_date: "2026-11-22" });
+const flightsTo = (destination: string) =>
+  JSON.stringify({
+    origin: "AUS",
+    destination,
+    outbound_date: "2026-12-04",
+    return_date: "2026-12-06",
+  });
+
+Deno.test("a slow Flights search doesn't trip the breaker or block Hotels", async () => {
+  const c = ctx();
+  let flights = await runTool("search_flights", "{}", c);
+  let hotels = flights;
+  const urls = await withSerpapi(
+    (url) => {
+      if (url.searchParams.get("engine") === "google_flights") {
+        throw new DOMException("Signal timed out.", "TimeoutError");
+      }
+      return fakeSerpapi(url);
+    },
+    async () => {
+      flights = await runTool("search_flights", flightsTo("BNA"), c);
+      hotels = await runTool("search_hotels", stay("Denver, CO"), c);
+      // Flights isn't paused either: the next Flights search is tried again.
+      await runTool("search_flights", flightsTo("JFK"), c);
+    },
+  );
+
+  assert(!flights.ok);
+  assertEquals(flights.summary, "flight search took too long. Carry on without it.");
+  assert(hotels.ok, hotels.summary);
+  assertEquals(c.found.get("hotel_1")?.details.source, "serpapi_google_hotels");
+  assertEquals(
+    urls.map((u) => u.searchParams.get("engine")),
+    ["google_flights", "google_hotels", "google_flights"],
+  );
+});
+
+Deno.test("a Flights server error pauses only Flights", async () => {
+  const c = ctx();
+  const urls = await withSerpapi(
+    (url) =>
+      url.searchParams.get("engine") === "google_flights"
+        ? Response.json({ error: "Internal error" }, { status: 503 })
+        : fakeSerpapi(url),
+    async () => {
+      await runTool("search_flights", flightsTo("BNA"), c);
+      await runTool("search_flights", flightsTo("JFK"), c); // paused: no call
+      await runTool("search_hotels", stay("Denver, CO"), c); // still live
+    },
+  );
+  assertEquals(
+    urls.map((u) => u.searchParams.get("engine")),
+    ["google_flights", "google_hotels"],
+  );
+});
+
+Deno.test("a 400 (our request's fault) doesn't pause anything", async () => {
+  const c = ctx();
+  const urls = await withSerpapi(
+    () => Response.json({ error: "Missing `departure_id` parameter." }, { status: 400 }),
+    async () => {
+      await runTool("search_flights", flightsTo("BNA"), c);
+      await runTool("search_flights", flightsTo("JFK"), c);
+    },
+  );
+  assertEquals(urls.length, 2);
+});

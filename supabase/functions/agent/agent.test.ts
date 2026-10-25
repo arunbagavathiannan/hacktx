@@ -8,6 +8,7 @@ import { memoryStore } from "../_shared/tools/store.ts";
 import type { Plan } from "../_shared/tools/types.ts";
 import { MAX_MODEL_CALLS, runAgent } from "./loop.ts";
 import { memorySteps } from "./steps.ts";
+import { VERIFIER_TIMEOUT_MS, verify } from "./verifier.ts";
 
 function setup(script?: [string, Record<string, unknown>][]) {
   const plan: Plan = {
@@ -317,4 +318,47 @@ Deno.test("preferences reach the planner and the verifier", async () => {
   assertMatch(verifier[0], /"preferences":\{"vibes":\["Outdoorsy"\]/);
   // $$ allows up to $350/night, so the demo plan still passes.
   assert(result.verified);
+});
+
+Deno.test("the verifier gets its own longer timeout and only the fields it checks", async () => {
+  const { plan } = setup();
+  const store = memoryStore(plan);
+  await store.insertOptions(plan.id, [
+    {
+      ref: "hotel_1",
+      category: "hotel",
+      title: "Catbird",
+      priceCents: 37800,
+      currency: "USD",
+      url: "https://example.com",
+      details: {
+        rate_per_night: 189,
+        total_rate: 378,
+        check_in_date: "2026-11-20",
+        description: "Apartment-style rooms with kitchenettes in RiNo, near the breweries.",
+        amenities: ["Free Wi-Fi", "Kitchenette"],
+        property_token: "PROP_CATBIRD",
+      },
+    },
+  ]);
+  let request: { timeoutMs?: number; text: string } | undefined;
+  await verify(
+    {
+      name: "spy",
+      complete: (req) => {
+        request = { timeoutMs: req.timeoutMs, text: req.messages.map((m) => m.content).join("\n") };
+        return Promise.resolve({ role: "assistant", content: '{"ok":true,"issues":[]}' });
+      },
+    },
+    demoChat,
+    { people: ["Sidd"], constraints: [], missing: [] },
+    await store.listOptions(plan.id),
+    "Sidd",
+  );
+
+  assertEquals(request?.timeoutMs, VERIFIER_TIMEOUT_MS);
+  assertMatch(request?.text ?? "", /"rate_per_night":189/);
+  assert(!request?.text.includes("Kitchenette"), "amenities left in the prompt");
+  assert(!request?.text.includes("PROP_CATBIRD"), "tokens left in the prompt");
+  assert(!request?.text.includes("breweries"), "description left in the prompt");
 });
