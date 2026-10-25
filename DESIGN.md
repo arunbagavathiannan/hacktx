@@ -2,15 +2,15 @@
 name: Huddle
 description: Takes the plans out of the group chat. A dark, sunset-lit Android app where every plan ends up as a ticket you hand back to the group.
 colors:
-  bg: "#0B0A09"
-  surface: "#161412"
-  raised: "#201D1A"
-  line: "#2C2824"
+  bg: "#1A1917"
+  surface: "#232120"
+  raised: "#2D2A27"
+  line: "#3B3834"
   ink: "#F5F1EC"
-  muted: "#A39B91"
-  faint: "#8F877D"
+  muted: "#A9A196"
+  faint: "#9A9288"
   accent: "#FF7A3D"
-  accent-soft: "#3A2216"
+  accent-soft: "#46291B"
   gold: "#FFB547"
   good: "#5BD68A"
   bad: "#FF5A5F"

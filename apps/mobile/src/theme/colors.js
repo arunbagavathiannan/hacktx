@@ -1,16 +1,16 @@
 // Single source of truth for colors: used by tailwind.config.js (classNames) and by
 // src/theme/index.ts (icons, three.js, anything that needs a raw value).
-// Dark + one warm "sunset" accent.
+// Warm dark gray (not black) + one "sunset" accent.
 const colors = {
-  bg: "#0B0A09",
-  surface: "#161412",
-  raised: "#201D1A",
-  line: "#2C2824",
+  bg: "#1A1917",
+  surface: "#232120",
+  raised: "#2D2A27",
+  line: "#3B3834",
   ink: "#F5F1EC",
-  muted: "#A39B91",
-  faint: "#8F877D", // 5.6:1 on bg, 5.2 on surface, 4.7 on raised
+  muted: "#A9A196",
+  faint: "#9A9288", // 5.7:1 on bg, 5.2 on surface, 4.7 on raised
   accent: "#FF7A3D",
-  "accent-soft": "#3A2216",
+  "accent-soft": "#46291B",
   gold: "#FFB547",
   good: "#5BD68A",
   bad: "#FF5A5F",
