@@ -41,7 +41,7 @@ export default function Working() {
       className="gap-0 px-0 pt-0"
       footer={
         finished ? (
-          <Animated.View entering={instant ? undefined : FadeInUp.springify().damping(16)}>
+          <Animated.View entering={instant ? undefined : FadeInUp.duration(300)}>
             <Button
               label="See the plan"
               onPress={() => router.push("/plan/summary")}
@@ -59,7 +59,7 @@ export default function Working() {
       <View className="gap-3 px-5 pb-4 pt-4">
         <View className="flex-row items-center gap-2">
           {ready ? (
-            <Animated.View entering={instant ? undefined : ZoomIn.springify().damping(10)}>
+            <Animated.View entering={instant ? undefined : ZoomIn.duration(200)}>
               <CheckCircle size={16} color={colors.good} weight="fill" />
             </Animated.View>
           ) : (

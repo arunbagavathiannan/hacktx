@@ -15,7 +15,7 @@ export function clockTime(iso: string) {
 // One incoming message: avatar, sender name in their color, bubble, time.
 export function ChatBubble({ message, sender }: { message: ChatMessage; sender: Member }) {
   return (
-    <Animated.View entering={FadeInDown.springify().damping(18).stiffness(180)}>
+    <Animated.View entering={FadeInDown.duration(260)}>
       <View className="flex-row items-start gap-2.5">
         {/* Sits beside the bubble, below the sender name. */}
         <View className="mt-[22px]">

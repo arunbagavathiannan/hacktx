@@ -56,16 +56,18 @@ const toPoints = (proj: Projection, line: Array<[number, number]>) =>
 
 function Basemap({ proj, size }: { proj: Projection; size: Size }) {
   const grid = useMemo(() => {
-    const lines: Array<{ x1: number; y1: number; x2: number; y2: number }> = [];
-    for (let lat = 39.6; lat <= 39.9; lat += 0.0075) {
+    // Keyed by row/column: the first row and first column start at the same corner, so
+    // coordinate-based keys collided (a red-screen duplicate-key error on Android).
+    const lines: Array<{ id: string; x1: number; y1: number; x2: number; y2: number }> = [];
+    for (let i = 0, lat = 39.6; lat <= 39.9; i++, lat += 0.0075) {
       const a = proj.project(lat, -105.3);
       const b = proj.project(lat, -104.8);
-      lines.push({ x1: a.x, y1: a.y, x2: b.x, y2: b.y });
+      lines.push({ id: `row-${i}`, x1: a.x, y1: a.y, x2: b.x, y2: b.y });
     }
-    for (let lng = -105.3; lng <= -104.8; lng += 0.0075) {
+    for (let i = 0, lng = -105.3; lng <= -104.8; i++, lng += 0.0075) {
       const a = proj.project(39.6, lng);
       const b = proj.project(39.9, lng);
-      lines.push({ x1: a.x, y1: a.y, x2: b.x, y2: b.y });
+      lines.push({ id: `col-${i}`, x1: a.x, y1: a.y, x2: b.x, y2: b.y });
     }
     return lines;
   }, [proj]);
@@ -74,13 +76,8 @@ function Basemap({ proj, size }: { proj: Projection; size: Size }) {
     <>
       <Rect x={0} y={0} width={size.width} height={size.height} fill={map.land} />
       <G>
-        {grid.map((l) => (
-          <Line
-            key={`${l.x1.toFixed(1)}-${l.y1.toFixed(1)}`}
-            {...l}
-            stroke={map.grid}
-            strokeWidth={1}
-          />
+        {grid.map(({ id, ...l }) => (
+          <Line key={id} {...l} stroke={map.grid} strokeWidth={1} />
         ))}
       </G>
 

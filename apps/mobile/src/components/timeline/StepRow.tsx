@@ -9,7 +9,6 @@ import Animated, {
   useSharedValue,
   withRepeat,
   withSequence,
-  withSpring,
   withTiming,
   ZoomIn,
 } from "react-native-reanimated";
@@ -87,7 +86,7 @@ export function StepRow({ step, status }: Props) {
   const tint = failed ? colors.gold : colors.accent;
 
   return (
-    <Animated.View entering={FadeInDown.springify().damping(18).stiffness(160)}>
+    <Animated.View entering={FadeInDown.duration(260)}>
       <View
         accessible
         accessibilityLabel={running ? `${step.label}, working` : stepSummary(step)}
@@ -114,7 +113,7 @@ export function StepRow({ step, status }: Props) {
             {running ? (
               <Text className="font-body-semibold text-xs text-accent">Working</Text>
             ) : (
-              <Animated.View entering={ZoomIn.springify().damping(12)}>
+              <Animated.View entering={ZoomIn.duration(200)}>
                 {failed ? (
                   <WarningCircle size={20} color={colors.gold} weight="fill" />
                 ) : (
@@ -146,8 +145,8 @@ export function ReadyRow({ summary, animate }: { summary: string; animate: boole
   useEffect(() => {
     if (!animate) return;
     pop.value = withSequence(
-      withSpring(1.18, { damping: 8, stiffness: 220 }),
-      withSpring(1, { damping: 12, stiffness: 180 }),
+      withTiming(1.06, { duration: 180, easing: Easing.out(Easing.cubic) }),
+      withTiming(1, { duration: 160, easing: Easing.inOut(Easing.cubic) }),
     );
   }, [animate, pop]);
   const style = useAnimatedStyle(() => ({ transform: [{ scale: pop.value }] }));

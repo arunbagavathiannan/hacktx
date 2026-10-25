@@ -21,7 +21,7 @@ export function PlanBanner({ title, body, members, onPlan, onDismiss }: Props) {
 
   return (
     <Animated.View
-      entering={SlideInUp.springify().damping(16).stiffness(140)}
+      entering={SlideInUp.duration(320)}
       exiting={SlideOutUp.duration(220)}
       style={{
         position: "absolute",

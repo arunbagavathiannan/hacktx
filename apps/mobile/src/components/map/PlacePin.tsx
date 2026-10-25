@@ -61,9 +61,7 @@ export function PlacePin({
 
   return (
     <Animated.View
-      entering={ZoomIn.delay(100 + index * 45)
-        .springify()
-        .damping(14)}
+      entering={ZoomIn.delay(100 + index * 45).duration(240)}
       style={{
         position: "absolute",
         left: x - size / 2,
