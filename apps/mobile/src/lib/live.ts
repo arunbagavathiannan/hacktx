@@ -37,7 +37,7 @@ export type StepRow = {
   result_summary: string | null;
 };
 
-type PlanRow = {
+export type PlanRow = {
   id: string;
   status: "planning" | "needs_input" | "voting" | "ready" | "booked" | "failed";
   title: string | null;
@@ -68,7 +68,7 @@ type PlanRow = {
   };
 };
 
-type OptionRow = {
+export type OptionRow = {
   id: string;
   category: "flight" | "hotel" | "restaurant" | "activity";
   title: string;

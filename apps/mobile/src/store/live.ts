@@ -10,10 +10,12 @@ import {
   loadDestination,
   type StepRow,
   startPlan,
+  toDestination,
   watchSteps,
 } from "@/lib/live";
 import { brief, members } from "@/mocks";
 import { setLiveDestination } from "@/mocks/destinations";
+import { DEMO_PLAN_ID, demoBooking, demoOptions, demoPlan, demoSteps } from "@/mocks/japanDemo";
 import type { ChatMessage, Preferences } from "@/mocks/types";
 import { usePlan } from "./plan";
 
@@ -59,6 +61,9 @@ type State = {
   // Books the group's current picks. Same picks as last time: nothing to do.
   book: (picks: string[]) => Promise<void>;
   reset: () => void;
+  // MOCK: the stage demo (mocks/japanDemo.ts): plays the Tokyo plan's timeline fast from dummy
+  // data and lands on it ready, with no agent or API calls.
+  runDemo: () => string;
 };
 
 // A run is over when nothing is running and its last step is a passed verify, a question for
@@ -179,6 +184,7 @@ export const useLive = create<State>()((set, get) => ({
   },
 
   watch: (planId) => {
+    if (planId === DEMO_PLAN_ID) return () => {};
     if (get().planId !== planId) set({ planId, phase: "running", steps: [] });
     return watchSteps(planId, async (rows) => {
       set({ steps: rows });
@@ -228,6 +234,10 @@ export const useLive = create<State>()((set, get) => ({
     const same = (a: string[] | null) =>
       a !== null && a.length === picks.length && [...a].sort().join() === [...picks].sort().join();
     if (!planId || get().bookingBusy || (get().booking && same(get().bookedPicks))) return;
+    if (planId === DEMO_PLAN_ID) {
+      set({ booking: demoBooking, bookedPicks: picks });
+      return;
+    }
     set({ bookingBusy: true });
     try {
       set({ booking: await bookPlan(planId, picks), bookedPicks: picks, bookingBusy: false });
@@ -241,6 +251,35 @@ export const useLive = create<State>()((set, get) => ({
         },
       });
     }
+  },
+
+  runDemo: () => {
+    set({
+      planId: DEMO_PLAN_ID,
+      phase: "running",
+      steps: [],
+      runFrom: 0,
+      error: null,
+      booking: null,
+      bookedPicks: null,
+    });
+    const STEP_MS = 1100;
+    demoSteps.forEach((step, i) => {
+      setTimeout(() => {
+        if (get().planId !== DEMO_PLAN_ID) return;
+        const done = get().steps.map((s) => ({ ...s, status: "done" as const }));
+        set({ steps: [...done, { ...step, status: "running" }] });
+      }, i * STEP_MS);
+    });
+    setTimeout(() => {
+      if (get().planId !== DEMO_PLAN_ID) return;
+      set({ steps: get().steps.map((s) => ({ ...s, status: "done" as const })) });
+      setLiveDestination(toDestination(demoPlan, demoOptions, [], names));
+      usePlan.setState({ destinationId: null });
+      usePlan.getState().chooseDestination(LIVE_ID);
+      set({ phase: "ready" });
+    }, demoSteps.length * STEP_MS);
+    return DEMO_PLAN_ID;
   },
 
   reset: () =>

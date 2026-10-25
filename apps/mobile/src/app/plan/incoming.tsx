@@ -26,6 +26,7 @@ import { PlanBanner } from "@/components/incoming/PlanBanner";
 import { TypingIndicator } from "@/components/incoming/TypingIndicator";
 import { LIVE } from "@/lib/live";
 import { brief, members, chat as mockChat, triggerMessageId } from "@/mocks";
+import { demoBanner, demoScript, isDemoTrigger } from "@/mocks/japanDemo";
 import type { Member } from "@/mocks/types";
 import { useLive } from "@/store/live";
 import { usePreferences } from "@/store/preferences";
@@ -90,6 +91,24 @@ export default function Incoming() {
   const bannerTitle = LIVE && detection?.summary ? `Plan the ${detection.summary}?` : mockTitle;
   const bannerBody =
     LIVE && lastMessage ? `“${lastMessage.text}” — ${memberFor(lastMessage.from).name}` : mockBody;
+  // MOCK: the stage demo (mocks/japanDemo.ts). Typing its first line plays the rest of the
+  // group's script, then the banner; Plan it runs the fast Tokyo plan from dummy data.
+  const [scripted, setScripted] = useState(false);
+  const demoTimers = useRef<ReturnType<typeof setTimeout>[]>([]);
+  useEffect(() => () => demoTimers.current.forEach(clearTimeout), []);
+  const playDemo = () => {
+    setScripted(true);
+    let at = 0;
+    for (const line of demoScript) {
+      at += line.afterMs;
+      demoTimers.current.push(
+        setTimeout(() => useLive.getState().addMessage(line.text, line.from), at),
+      );
+    }
+    demoTimers.current.push(
+      setTimeout(() => setBanner((b) => (b === "hidden" ? "open" : b)), at + 1200),
+    );
+  };
   const [starting, setStarting] = useState(false);
   const [startError, setStartError] = useState<string | null>(null);
   const reduceMotion = useReducedMotion();
@@ -102,14 +121,18 @@ export default function Incoming() {
 
   // Live mode: after the chat goes quiet for a moment, Huddle (Muse Spark) reads it. The
   // banner drops in only when it says this is turning into a plan, for any place.
+  // Demo switch (Settings): with "Wait for your message" on, only your own message triggers it.
+  const waitForYou = usePreferences((s) => s.waitForYou);
+  const lastFrom = chat[chat.length - 1]?.from;
   useEffect(() => {
-    if (!LIVE || chat.length === 0 || banner !== "hidden") return;
+    if (!LIVE || scripted || chat.length === 0 || banner !== "hidden") return;
+    if (waitForYou && lastFrom !== "you") return;
     const timer = setTimeout(async () => {
       const result = await useLive.getState().detect();
       if (result?.isPlan) setBanner((b) => (b === "hidden" ? "open" : b));
     }, DETECT_AFTER_MS);
     return () => clearTimeout(timer);
-  }, [chat.length, banner]);
+  }, [chat.length, banner, waitForYou, lastFrom, scripted]);
 
   // Play the chat: one message every MESSAGE_GAP_MS, then the banner. (Mock demo only; in
   // live mode the chat is typed for real.)
@@ -144,6 +167,11 @@ export default function Incoming() {
   // the Review pill instead of the open banner (and nothing replays).
   const planIt = async () => {
     setBanner("dismissed");
+    if (scripted) {
+      const id = useLive.getState().runDemo();
+      router.push({ pathname: "/plan/working", params: { plan: id } });
+      return;
+    }
     if (!LIVE) {
       router.push("/plan/working");
       return;
@@ -162,6 +190,7 @@ export default function Incoming() {
     if (!text) return;
     useLive.getState().addMessage(text, sender);
     setDraft("");
+    if (LIVE && !scripted && isDemoTrigger(text)) playDemo();
   };
 
   const goBack = () => (router.canGoBack() ? router.back() : router.replace("/"));
@@ -445,8 +474,8 @@ export default function Incoming() {
 
       {banner === "open" ? (
         <PlanBanner
-          title={bannerTitle}
-          body={bannerBody}
+          title={scripted ? demoBanner.title : bannerTitle}
+          body={scripted ? demoBanner.body : bannerBody}
           members={friends}
           onPlan={planIt}
           onDismiss={() => setBanner("dismissed")}

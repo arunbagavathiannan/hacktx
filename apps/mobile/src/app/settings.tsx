@@ -7,7 +7,7 @@ import {
   ShieldCheck,
 } from "phosphor-react-native";
 import { useState } from "react";
-import { Pressable, View } from "react-native";
+import { Pressable, Switch, View } from "react-native";
 import { ResetConfirm } from "@/components/settings/ResetDemo";
 import { SettingRow } from "@/components/settings/SettingRow";
 import { demoPrefs } from "@/components/summary/personalize";
@@ -38,6 +38,8 @@ export default function Settings() {
   const vibes = usePreferences((s) => s.vibes);
   const budget = usePreferences((s) => s.budget);
   const food = usePreferences((s) => s.food);
+  const waitForYou = usePreferences((s) => s.waitForYou);
+  const setWaitForYou = usePreferences((s) => s.setWaitForYou);
   const maxTravel = usePreferences((s) => s.maxTravel);
   const prefs: Preferences =
     demo === "prefs" || demo === "reset" ? demoPrefs : { vibes, budget, food, maxTravel };
@@ -100,6 +102,22 @@ export default function Settings() {
           ))}
         </View>
         <Muted>Huddle uses these so it asks your group fewer questions.</Muted>
+      </View>
+
+      <View className="gap-2">
+        <Label accessibilityRole="header">Demo</Label>
+        <View className="min-h-12 flex-row items-center gap-4 py-3">
+          <Muted className="flex-1">
+            Wait for your message: Huddle only reads the chat after you send one, so you can type
+            the whole group chat first.
+          </Muted>
+          <Switch
+            accessibilityLabel="Wait for your message"
+            value={waitForYou}
+            onValueChange={setWaitForYou}
+            trackColor={{ true: colors.accent, false: colors.raised }}
+          />
+        </View>
       </View>
 
       <View className="gap-2">
