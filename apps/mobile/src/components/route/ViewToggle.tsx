@@ -28,7 +28,8 @@ export function ViewToggle({
             accessibilityRole="tab"
             accessibilityState={{ selected: active }}
             onPress={() => onChange(o.id)}
-            className={`flex-1 items-center rounded-full py-1.5 active:opacity-80 ${
+            // min-h-12: 48dp touch target.
+            className={`min-h-12 flex-1 items-center justify-center rounded-full active:opacity-80 ${
               active ? "bg-raised" : ""
             }`}
           >

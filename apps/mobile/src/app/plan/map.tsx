@@ -1,7 +1,7 @@
 import { LinearGradient } from "expo-linear-gradient";
 import { router, useLocalSearchParams } from "expo-router";
 import { ArrowRight, CaretLeft } from "phosphor-react-native";
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import Animated, { FadeIn, useReducedMotion } from "react-native-reanimated";
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -13,6 +13,7 @@ import { PlaceSheet } from "@/components/map/PlaceSheet";
 import { DriveCard } from "@/components/route/DriveCard";
 import {
   airportFor,
+  gasPerPerson,
   globeRoute,
   type LegPlan,
   planLegs,
@@ -24,7 +25,7 @@ import { AvatarStack, Button, Chip, Heading, Muted } from "@/components/ui";
 import { estimatePerPerson, groupSize, nightsBetween } from "@/lib/pricing";
 import { flights, members, places, trip } from "@/mocks";
 import { multiFlights, multiTrip } from "@/mocks/multi";
-import { isDriving, usePlan } from "@/store/plan";
+import { isDriving, togglePlace, usePlan, withFlight } from "@/store/plan";
 import { colors } from "@/theme";
 
 // Room on the map for the overlays: filter chips on top, the flights row at the bottom.
@@ -38,7 +39,8 @@ const ALL_FLIGHT_IDS = new Set([...flights, ...multiFlights].map((f) => f.id));
 // ?demo=globe (globe mid-zoom), ?demo=map (skip the intro), ?demo=callout (pin callout
 // open), ?demo=sheet (Red Rocks callout + details sheet open), ?demo=route (Route tab),
 // ?demo=multi (two-city route, mocks/multi.ts), ?demo=drive (as if the group answered
-// "Drive"; display-only, never saved to usePlan).
+// "Drive"). multi and drive are sandboxed: picks live in local state, never in usePlan,
+// and booking is off there (the booked screen only knows the real Denver plan).
 export default function MapScreen() {
   const { demo } = useLocalSearchParams<{ demo?: string }>();
   const reduceMotion = useReducedMotion();
@@ -46,6 +48,7 @@ export default function MapScreen() {
     reduceMotion || ["map", "callout", "sheet", "route", "multi", "drive"].includes(demo ?? "");
 
   const isMulti = demo === "multi";
+  const sandboxed = isMulti || demo === "drive";
   const activeTrip = isMulti ? multiTrip : trip;
   const tripFlights = isMulti ? multiFlights : flights;
 
@@ -62,28 +65,39 @@ export default function MapScreen() {
   );
   const [detailsId, setDetailsId] = useState<string | null>(demo === "sheet" ? "a1" : null);
 
-  const picks = usePlan((s) => s.picks);
+  const storePicks = usePlan((s) => s.picks);
   const answers = usePlan((s) => s.answers);
-  const togglePick = usePlan((s) => s.togglePick);
-  const pickFlight = usePlan((s) => s.pickFlight);
+  const storeTogglePick = usePlan((s) => s.togglePick);
+  const storePickFlight = usePlan((s) => s.pickFlight);
   const driving = demo === "drive" || isDriving(answers);
+
+  // MOCK: demo-only. Sandboxed demos copy the real picks once and change only the copy.
+  // The two-city route starts with the group's favorite flight on each flying leg.
+  const [demoPicks, setDemoPicks] = useState<string[] | null>(() => {
+    if (!sandboxed) return null;
+    const placesOnly = usePlan.getState().picks.filter((id) => !ALL_FLIGHT_IDS.has(id));
+    if (!isMulti) return usePlan.getState().picks;
+    const seeded = multiTrip.legs.flatMap((l) =>
+      l.mode === "fly" ? (l.flightIds ?? []).slice(0, 1) : [],
+    );
+    return [...placesOnly, ...seeded];
+  });
+  const picks = demoPicks ?? storePicks;
+  const togglePick = (id: string) =>
+    demoPicks ? setDemoPicks(togglePlace(demoPicks, id)) : storeTogglePick(id);
 
   const legs = useMemo(
     () => planLegs(activeTrip, tripFlights, picks, driving),
     [activeTrip, tripFlights, picks, driving],
   );
   const firstLeg = legs[0];
-  const pickLegFlight = (leg: LegPlan, id: string) => pickFlight(id, leg.leg.flightIds);
+  const pickLegFlight = (leg: LegPlan, id: string) =>
+    demoPicks
+      ? setDemoPicks(withFlight(demoPicks, id, leg.leg.flightIds ?? []))
+      : storePickFlight(id, leg.leg.flightIds);
 
-  // MOCK: demo-only. The two-city route starts with the group's favorite flight per leg.
-  // biome-ignore lint/correctness/useExhaustiveDependencies: seed once when the demo opens
-  useEffect(() => {
-    if (!isMulti) return;
-    for (const leg of legs) {
-      const first = leg.options[0];
-      if (leg.mode === "fly" && !leg.picked && first) pickLegFlight(leg, first.id);
-    }
-  }, [isMulti]);
+  // The Route globe swings in once; after that (or with reduced motion) it opens settled.
+  const [routeGlobeSettled, setRouteGlobeSettled] = useState(false);
 
   const shownPlaces = useMemo(
     () => (filter === "all" ? places : places.filter((p) => p.category === filter)),
@@ -100,15 +114,24 @@ export default function MapScreen() {
     : [];
 
   // Same math as the booked screen (lib/pricing), plus each leg's flight or gas.
+  // The map's places (and the hotel) are all at the first stop, so the hotel is priced for
+  // that stop's nights only; on the one-city trip that's the whole trip.
   const placePicks = picks.filter((id) => !ALL_FLIGHT_IDS.has(id));
   const people = groupSize(activeTrip);
+  const firstStop = activeTrip.stops[0];
   const perPerson =
     estimatePerPerson(placePicks, {
       places,
       flights: [],
       people,
-      nights: nightsBetween(activeTrip.dates.start, activeTrip.dates.end),
+      nights: firstStop
+        ? nightsBetween(firstStop.arrive, firstStop.depart)
+        : nightsBetween(activeTrip.dates.start, activeTrip.dates.end),
     }) + travelPerPerson(legs);
+  const driveMiles = legs.reduce(
+    (s, l) => s + (l.mode === "drive" ? (l.leg.driveMiles ?? 0) : 0),
+    0,
+  );
   const pickCount = placePicks.length + legs.filter((l) => l.picked).length;
   const fitsBudget = perPerson <= activeTrip.budgetPerPerson;
 
@@ -159,8 +182,11 @@ export default function MapScreen() {
               legs={legs}
               members={members}
               onPickFlight={pickLegFlight}
-              // MOCK: demo-only. Screenshots catch the settled globe, not mid-zoom.
-              globeFrozenAt={demo === "route" || isMulti ? 1 : undefined}
+              // MOCK: demo-only for route/multi (screenshots catch the settled globe).
+              globeFrozenAt={
+                reduceMotion || routeGlobeSettled || demo === "route" || isMulti ? 1 : undefined
+              }
+              onGlobeSettled={() => setRouteGlobeSettled(true)}
             />
           ) : (
             <>
@@ -224,12 +250,14 @@ export default function MapScreen() {
                 >
                   {firstLeg.mode === "drive" ? (
                     <View className="px-5">
+                      {/* Whole-trip gas, the same number the footer and booked screen use. */}
                       <DriveCard
                         from={firstLeg.leg.from}
                         hours={firstLeg.leg.driveHours}
-                        miles={firstLeg.leg.driveMiles}
-                        perPerson={firstLeg.perPerson}
+                        miles={driveMiles || undefined}
+                        perPerson={gasPerPerson(legs)}
                         people={people}
+                        scope="round trip"
                       />
                     </View>
                   ) : (
@@ -265,10 +293,14 @@ export default function MapScreen() {
           </View>
           <Button
             label="Book the plan"
-            disabled={pickCount === 0}
+            disabled={pickCount === 0 || sandboxed}
             icon={<ArrowRight size={20} color={colors.bg} weight="regular" />}
             onPress={() => router.push("/plan/booked")}
           />
+          {sandboxed ? (
+            // MOCK: demo-only preview; its picks never reach the real plan.
+            <Muted className="text-center text-xs">Preview only. Booking is off here.</Muted>
+          ) : null}
         </View>
       </SafeAreaView>
 

@@ -52,12 +52,13 @@ export function globeRoute(trip: Trip, legs: LegPlan[]) {
     { kind: "origin", lat: trip.origin.lat, lng: trip.origin.lng },
     ...trip.stops.map((s) => ({ kind: "stop" as const, lat: s.lat, lng: s.lng })),
   ];
-  // A return leg over the same path (Denver -> Austin) would redraw the same arc.
+  // A return leg over the same path and mode (fly Denver -> Austin) would redraw the same
+  // arc. Fly out + drive back keeps both.
   const seen = new Set<string>();
   const arcs: GlobeArc[] = legs.flatMap((l) => {
     const from = coords.get(l.leg.from);
     const to = coords.get(l.leg.to);
-    const pair = [l.leg.from, l.leg.to].sort().join("|");
+    const pair = `${[l.leg.from, l.leg.to].sort().join("|")}|${l.mode}`;
     if (!from || !to || seen.has(pair)) return [];
     seen.add(pair);
     return [{ from, to, mode: l.mode }];

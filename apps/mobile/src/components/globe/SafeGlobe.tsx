@@ -28,30 +28,37 @@ type Props = GlobeProps & { onFail?: () => void; timeoutMs?: number };
 export function SafeGlobe({ onFail, timeoutMs = 4000, onFirstFrame, ...props }: Props) {
   const [failed, setFailed] = useState(false);
   const drew = useRef(false);
+  const failedRef = useRef(false);
+  const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const onFailRef = useRef(onFail);
   onFailRef.current = onFail;
 
+  // Fires at most once, whichever comes first: a render error or the timeout.
+  const fail = useRef(() => {
+    if (failedRef.current) return;
+    failedRef.current = true;
+    if (timer.current) clearTimeout(timer.current);
+    setFailed(true);
+    onFailRef.current?.();
+  }).current;
+
   useEffect(() => {
-    const timer = setTimeout(() => {
-      if (drew.current) return;
-      setFailed(true);
-      onFailRef.current?.();
+    timer.current = setTimeout(() => {
+      if (!drew.current) fail();
     }, timeoutMs);
-    return () => clearTimeout(timer);
-  }, [timeoutMs]);
+    return () => {
+      if (timer.current) clearTimeout(timer.current);
+    };
+  }, [timeoutMs, fail]);
 
   if (failed) return null;
   return (
-    <GlobeBoundary
-      onError={() => {
-        setFailed(true);
-        onFailRef.current?.();
-      }}
-    >
+    <GlobeBoundary onError={fail}>
       <Globe
         {...props}
         onFirstFrame={() => {
           drew.current = true;
+          if (timer.current) clearTimeout(timer.current);
           onFirstFrame?.();
         }}
       />

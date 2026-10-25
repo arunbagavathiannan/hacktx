@@ -29,6 +29,8 @@ export type GlobeProps = {
 const LAND_DOTS = 16000;
 const DOT_COLOR = new THREE.Color("#8C7B6B");
 const HOT_COLOR = new THREE.Color(colors.accent);
+// Flights are accent, the origin is gold, drives are ink (the Route legend matches).
+export const DRIVE_ARC_COLOR = colors.ink;
 // Longest frame step the animation takes. A stalled first frame (shader compile, slow GL
 // start) would otherwise jump the intro straight to the end.
 const MAX_DELTA = 1 / 30;
@@ -228,20 +230,17 @@ export function GlobeScene({
 
   const dotUniforms = useMemo(() => ({ uSize: { value: 7 }, uPixelRatio: { value: dpr } }), [dpr]);
 
+  // One disposal per geometry, so new arcs (a mode flip) don't throw away the land dots.
+  useEffect(() => () => dots.dispose(), [dots]);
+  useEffect(() => () => stars.dispose(), [stars]);
   useEffect(
     () => () => {
-      dots.dispose();
       for (const g of arcGeometries) g.dispose();
-      stars.dispose();
     },
-    [dots, arcGeometries, stars],
+    [arcGeometries],
   );
 
   useFrame((_, delta) => {
-    if (!started.current) {
-      started.current = true;
-      onFirstFrame?.();
-    }
     elapsed.current += Math.min(delta, MAX_DELTA) * 1000;
     const progress = frozenAt ?? clamp01(elapsed.current / durationMs);
     const e = easeInOutCubic(progress);
@@ -261,6 +260,12 @@ export function GlobeScene({
       const share = clamp01(drawn - i);
       g.setDrawRange(0, Math.floor((total * share) / 6) * 6);
     });
+
+    // Only after a full frame of scene work ran without throwing (SafeGlobe's timeout).
+    if (!started.current) {
+      started.current = true;
+      onFirstFrame?.();
+    }
 
     if (progress >= 1 && !finished.current && frozenAt === undefined) {
       finished.current = true;
@@ -300,7 +305,7 @@ export function GlobeScene({
       {arcGeometries.map((g, i) => (
         // biome-ignore lint/suspicious/noArrayIndexKey: arcs are a fixed list per trip
         <mesh key={i} geometry={g}>
-          <meshBasicMaterial color={arcs[i]?.mode === "drive" ? colors.gold : colors.accent} />
+          <meshBasicMaterial color={arcs[i]?.mode === "drive" ? DRIVE_ARC_COLOR : colors.accent} />
         </mesh>
       ))}
       {markers.map((m, i) => (

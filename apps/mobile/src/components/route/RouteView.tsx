@@ -2,6 +2,7 @@ import { AirplaneTilt, Car } from "phosphor-react-native";
 import { useMemo, useState } from "react";
 import { ScrollView, Text, View } from "react-native";
 import Animated, { FadeIn } from "react-native-reanimated";
+import { DRIVE_ARC_COLOR } from "@/components/globe/GlobeScene";
 import { SafeGlobe } from "@/components/globe/SafeGlobe";
 import { FlightsRow } from "@/components/map/FlightsRow";
 import { groupSize } from "@/lib/pricing";
@@ -15,7 +16,10 @@ type Props = {
   legs: LegPlan[];
   members: Member[];
   onPickFlight: (leg: LegPlan, flightId: string) => void;
-  globeFrozenAt?: number; // hold the globe at this progress (screenshots)
+  // Hold the globe at this progress: 1 after its first play, with reduced motion, or for
+  // screenshots.
+  globeFrozenAt?: number;
+  onGlobeSettled?: () => void; // the swing-in finished
 };
 
 const WEEKDAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
@@ -35,7 +39,14 @@ function legDay(trip: Trip, leg: LegPlan) {
 
 // Route tab of the map screen: the globe with every stop and leg, then each leg with its
 // own single-select flight picker (or the drive card when the group drives it).
-export function RouteView({ trip, legs, members, onPickFlight, globeFrozenAt }: Props) {
+export function RouteView({
+  trip,
+  legs,
+  members,
+  onPickFlight,
+  globeFrozenAt,
+  onGlobeSettled,
+}: Props) {
   const [globeFailed, setGlobeFailed] = useState(false);
   // Memoized on the legs' modes so the globe doesn't rebuild when a flight is picked.
   const modes = legs.map((l) => l.mode).join(",");
@@ -54,6 +65,7 @@ export function RouteView({ trip, legs, members, onPickFlight, globeFrozenAt }: 
             arcs={globe.arcs}
             durationMs={1600}
             frozenAt={globeFrozenAt}
+            onDone={onGlobeSettled}
             onFail={() => setGlobeFailed(true)}
           />
           <View className="absolute bottom-3 left-5 right-5 flex-row flex-wrap gap-x-3 gap-y-1">
@@ -63,6 +75,12 @@ export function RouteView({ trip, legs, members, onPickFlight, globeFrozenAt }: 
                 {city}
               </Text>
             ))}
+            {legs.some((l) => l.mode === "drive") ? (
+              <Text className="font-body-semibold text-xs text-muted">
+                <Text style={{ color: DRIVE_ARC_COLOR }}>━ </Text>
+                Drive
+              </Text>
+            ) : null}
           </View>
         </View>
       )}
@@ -92,6 +110,7 @@ export function RouteView({ trip, legs, members, onPickFlight, globeFrozenAt }: 
                     miles={leg.leg.driveMiles}
                     perPerson={leg.perPerson}
                     people={people}
+                    scope="each way"
                   />
                 </View>
               ) : leg.options.length > 0 ? (

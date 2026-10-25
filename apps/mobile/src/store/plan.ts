@@ -25,8 +25,14 @@ export function isDriving(answers: Record<string, string>) {
   return answers[TRAVEL_QUESTION_ID] === "Drive";
 }
 
-function withFlight(picks: string[], id: string, among: string[]) {
+// Pure pick rules, shared with demo-only local state on the map screen.
+// Flights are radio within `among`; places toggle.
+export function withFlight(picks: string[], id: string, among: string[]) {
   return [...picks.filter((p) => p !== id && !among.includes(p)), id];
+}
+
+export function togglePlace(picks: string[], id: string) {
+  return picks.includes(id) ? picks.filter((p) => p !== id) : [...picks, id];
 }
 
 // Default plan, so it's never empty in the demo: the group's most-picked flight and
@@ -51,7 +57,7 @@ export const usePlan = create<State>()((set) => ({
   togglePick: (id) =>
     set((s) => {
       if (FLIGHT_IDS.includes(id)) return { picks: withFlight(s.picks, id, FLIGHT_IDS) };
-      return { picks: s.picks.includes(id) ? s.picks.filter((p) => p !== id) : [...s.picks, id] };
+      return { picks: togglePlace(s.picks, id) };
     }),
   pickFlight: (id, among = FLIGHT_IDS) => set((s) => ({ picks: withFlight(s.picks, id, among) })),
   reset: () => set({ answers: {}, picks: defaultPicks() }),
