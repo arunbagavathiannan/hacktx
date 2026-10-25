@@ -2,29 +2,35 @@ import type { Preferences } from "@/mocks/types";
 
 export type Option = { label: string; title?: string; description?: string };
 
-// The four onboarding questions, in order. Copy lives here so the screen stays small.
+// The onboarding questions, in order: home city, vibe, food. Copy lives here so the screen stays small. No budget or
+// travel-distance question: Huddle asks the group in the chat when it needs to.
 export const steps = [
+  {
+    key: "home",
+    title: "Where are you based?",
+    subtitle: "Huddle plans trips from here, so flights leave from your city.",
+  },
   {
     key: "vibes",
     title: "What's your vibe?",
     subtitle: "Pick as many as you like. Huddle leans every plan toward these.",
   },
   {
-    key: "budget",
-    title: "How do you like to spend?",
-    subtitle: "Per person, for a weekend away.",
-  },
-  {
     key: "food",
     title: "Anything you don't eat?",
     subtitle: "Huddle only suggests places that work for you.",
   },
-  {
-    key: "maxTravel",
-    title: "How far will you go?",
-    subtitle: "For a weekend trip. You can always say yes to more.",
-  },
 ] as const satisfies ReadonlyArray<{ key: keyof Preferences; title: string; subtitle: string }>;
+
+// One-tap picks for the home city question; any city can be typed. The airport and map spot
+// go to the planner with the city, so flights and the route start from the right place.
+export const homeCities: Record<string, { airport: string; lat: number; lng: number }> = {
+  Austin: { airport: "AUS", lat: 30.1975, lng: -97.6664 },
+  Houston: { airport: "IAH", lat: 29.9902, lng: -95.3368 },
+  Dallas: { airport: "DFW", lat: 32.8998, lng: -97.0403 },
+  "San Antonio": { airport: "SAT", lat: 29.5337, lng: -98.4698 },
+};
+export const cityOptions = Object.keys(homeCities);
 
 export const vibeOptions: Option[] = [
   { label: "Chill" },
@@ -36,12 +42,6 @@ export const vibeOptions: Option[] = [
   { label: "Live music" },
 ];
 
-export const budgetOptions: Array<Option & { label: NonNullable<Preferences["budget"]> }> = [
-  { label: "$", title: "Keep it cheap", description: "Hostels, street food, free things to do." },
-  { label: "$$", title: "Comfortable", description: "A nice hotel and a couple of good dinners." },
-  { label: "$$$", title: "Treat yourself", description: "The good hotel and the splurge dinner." },
-];
-
 export const NO_RESTRICTIONS = "No restrictions";
 
 export const foodOptions: Option[] = [
@@ -51,12 +51,6 @@ export const foodOptions: Option[] = [
   { label: "Halal" },
   { label: "Gluten-free" },
   { label: "Nut allergy" },
-];
-
-export const travelOptions: Option[] = [
-  { label: "Driving distance", description: "Road trips, up to about five hours." },
-  { label: "Short flight (<3h)", description: "Nonstop and there by lunch." },
-  { label: "Anywhere", description: "If the trip is good, distance doesn't matter." },
 ];
 
 // Multi-select toggle. "No restrictions" can't be combined with a restriction.

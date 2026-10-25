@@ -55,7 +55,26 @@ export interface Trip {
   constraints: string[];
   // Things the chat didn't settle (e.g. "dates", "budget"). The agent asks about these.
   missing: string[];
+  // Budgets people gave for themselves ("im in if it's under 400" → { Jordan: 400 }).
+  budgets?: Record<string, number>;
+  // Each person's version of the plan, worked out after the plan is verified.
+  individuals?: IndividualPlan[];
   booking?: Booking;
+}
+
+// One person's take on the group plan: same hotel, but the way they get there can differ
+// when the group's pick doesn't fit their budget.
+export interface IndividualPlan {
+  name: string;
+  budgetUsd?: number;
+  travelRef?: string;
+  travel: string; // "Frontier · Nonstop", "Greyhound · Bus", "Drive"
+  travelUsd?: number; // per person; missing when the fare is only on the seller's site
+  hotelShareUsd: number;
+  totalUsd: number; // travel + hotel share
+  overBudgetUsd?: number;
+  // Why their travel differs from the group's, e.g. "Cheaper than the group's flight".
+  note?: string;
 }
 
 // A search result in one common shape, whatever API it came from. `ref` (e.g. "hotel_2") is
@@ -118,6 +137,8 @@ export interface ToolContext {
   chat: ChatMessage[];
   // The phone owner (the person who tapped the notification).
   userName: string;
+  // Everyone in the group chat. Each plan includes all of them, not just who has spoken.
+  members?: string[];
   // Search results from this run, by ref. pin_on_map saves picks from here.
   found: Map<string, Option>;
   // True only when the user tapped "Book" in the app. book refuses otherwise.

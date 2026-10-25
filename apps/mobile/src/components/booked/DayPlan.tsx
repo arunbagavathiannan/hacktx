@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
-import { Text, View } from "react-native";
+import { Linking, Pressable, Text, View } from "react-native";
+import { isGround, travelDetail, travelPrice } from "@/components/map/travel";
 import { Heading, Muted } from "@/components/ui";
 import { cn } from "@/lib/cn";
 import type { PlaceCategory, Trip } from "@/mocks/types";
@@ -28,34 +29,55 @@ function Row({
   detail,
   price,
   first,
+  link,
 }: {
   kind: PlaceCategory | "flight";
   title: string;
   detail: string;
   price: string;
   first: boolean;
+  // Live plans: where to book (or reserve) this item, right in the itinerary.
+  link?: { label: string; url: string };
 }) {
   const RowIcon = kindIcons[kind];
   return (
-    <View
-      accessible
-      accessibilityLabel={`${title}. ${detail}. ${price === "incl." ? "Included" : `${price} each`}`}
-      className={cn("flex-row items-start gap-3 py-3", !first && "border-t border-line")}
-    >
-      <View className="pt-0.5">
-        <RowIcon size={18} color={colors.muted} weight={icon.weight} />
-      </View>
-      <View className="flex-1 gap-0.5">
-        <Text numberOfLines={1} className="font-body-semibold text-body text-ink">
-          {title}
+    <View className={cn("flex-row items-start gap-3 py-3", !first && "border-t border-line")}>
+      <View
+        accessible
+        accessibilityLabel={`${title}. ${detail}. ${price === "incl." ? "Included" : `${price} each`}`}
+        className="flex-1 flex-row items-start gap-3"
+      >
+        <View className="pt-0.5">
+          <RowIcon size={18} color={colors.muted} weight={icon.weight} />
+        </View>
+        <View className="flex-1 gap-0.5">
+          <Text numberOfLines={1} className="font-body-semibold text-body text-ink">
+            {title}
+          </Text>
+          <Muted numberOfLines={2}>{detail}</Muted>
+        </View>
+        <Text className="font-body-bold text-body text-ink" style={TABULAR}>
+          {price}
         </Text>
-        <Muted numberOfLines={2}>{detail}</Muted>
       </View>
-      <Text className="font-body-bold text-body text-ink" style={TABULAR}>
-        {price}
-      </Text>
+      {link ? (
+        <Pressable
+          accessibilityRole="link"
+          accessibilityLabel={`${link.label} ${title}`}
+          onPress={() => Linking.openURL(link.url)}
+          className="min-h-9 items-center justify-center rounded-full bg-accent px-3 active:opacity-80"
+        >
+          <Text className="font-body-semibold text-small text-bg">{link.label}</Text>
+        </Pressable>
+      ) : null}
     </View>
   );
+}
+
+// Live plans: what each kind of item asks for, and where (the option's own link).
+function bookLink(kind: PlaceCategory | "flight", url?: string) {
+  if (!url) return undefined;
+  return { label: kind === "food" ? "Reserve" : kind === "nightlife" ? "Details" : "Book", url };
 }
 
 function plural(n: number, word: string) {
@@ -65,6 +87,20 @@ function plural(n: number, word: string) {
 function itemRow(item: Item, trip: Trip, first: boolean) {
   if (item.kind === "flight") {
     const f = item.flight;
+    // Trains, buses and driving: city to city, by how long it takes.
+    if (isGround(f)) {
+      return (
+        <Row
+          key={item.id}
+          first={first}
+          kind="flight"
+          title={`${f.airline} · ${trip.origin.city} → ${trip.destination.city}`}
+          detail={travelDetail(f)}
+          price={travelPrice(f)}
+          link={bookLink("flight", f.url)}
+        />
+      );
+    }
     return (
       <Row
         key={item.id}
@@ -73,6 +109,28 @@ function itemRow(item: Item, trip: Trip, first: boolean) {
         title={`${f.airline} · ${trip.origin.airport} → ${trip.destination.city}`}
         detail={`${f.depart} → ${f.arrive} · ${f.stops === 0 ? "Nonstop" : plural(f.stops, "stop")}`}
         price={`$${item.perPerson}`}
+        link={bookLink("flight", f.url)}
+      />
+    );
+  }
+  if (item.kind === "return") {
+    // The way back: booked with the way there (round-trip fare, or the same car).
+    const f = item.flight;
+    const ground = isGround(f);
+    return (
+      <Row
+        key={item.id}
+        first={first}
+        kind="flight"
+        title={`${ground ? f.airline : `${f.airline} home`} · ${trip.destination.city} → ${
+          ground ? trip.origin.city : trip.origin.airport
+        }`}
+        detail={
+          f.mode === "drive"
+            ? "Drive home · gas is in the estimate"
+            : "Trip home · included in the round trip"
+        }
+        price="incl."
       />
     );
   }
@@ -97,6 +155,7 @@ function itemRow(item: Item, trip: Trip, first: boolean) {
       title={p.name}
       detail={[p.hours, p.distanceLabel].filter(Boolean).join(" · ")}
       price={`${item.estimate ? "~" : ""}$${item.perPerson}`}
+      link={bookLink(p.category, p.url)}
     />
   );
 }
@@ -139,6 +198,7 @@ export function StaySection({ stays, trip }: { stays: Stay[]; trip: Trip }) {
             .filter(Boolean)
             .join(" · ")}
           price={`$${s.perPerson}`}
+          link={bookLink("hotel", s.place.url)}
         />
       ))}
     </Section>

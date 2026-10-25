@@ -4,6 +4,8 @@ import { View } from "react-native";
 import { PastPlans } from "@/components/home/PastPlans";
 import { PlanCard } from "@/components/home/PlanCard";
 import { Button, Display, IconButton, Label, Muted, Screen } from "@/components/ui";
+import { LIVE } from "@/lib/live";
+import { useLive } from "@/store/live";
 import { usePreferences } from "@/store/preferences";
 
 // Home: the plans Huddle spotted in your chats. In the demo, the plan starts from the
@@ -24,7 +26,14 @@ export default function Home() {
       footer={
         <View className="gap-2">
           <Muted>Plays a group chat turning into a plan, with the popup you'd get.</Muted>
-          <Button label="Simulate a plan" onPress={() => router.push("/plan/incoming")} />
+          <Button
+            label="Simulate a plan"
+            onPress={() => {
+              // Live mode: every run starts from an empty chat.
+              if (LIVE) useLive.getState().reset();
+              router.push("/plan/incoming");
+            }}
+          />
         </View>
       }
     >

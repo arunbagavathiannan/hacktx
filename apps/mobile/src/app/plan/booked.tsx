@@ -2,8 +2,10 @@ import { Redirect, router, useLocalSearchParams } from "expo-router";
 import { ArrowSquareOut, Info, MapTrifold, PaperPlaneTilt } from "phosphor-react-native";
 import { type ComponentRef, useEffect, useMemo, useRef, useState } from "react";
 import { Linking, Pressable, useWindowDimensions, View } from "react-native";
+import { Alternatives } from "@/components/booked/Alternatives";
 import { BudgetLine, DaySection, StaySection } from "@/components/booked/DayPlan";
 import { buildItinerary, summaryText } from "@/components/booked/itinerary";
+import { PeopleSection } from "@/components/booked/PeopleSection";
 import { Reveal } from "@/components/booked/Reveal";
 import { FRAME_HEIGHT, FRAME_WIDTH, ShareCard } from "@/components/booked/ShareCard";
 import {
@@ -15,10 +17,11 @@ import {
 } from "@/components/booked/share";
 import { gasPerPerson, planLegs } from "@/components/route/legs";
 import { Body, Button, Caption, Display, Muted, Screen, Title } from "@/components/ui";
-import { LIVE, LIVE_ID } from "@/lib/live";
+import { LIVE, LIVE_ID, planShareUrl } from "@/lib/live";
+import { offerEach } from "@/lib/pricing";
 import type { Trip } from "@/mocks/types";
 import { useLive } from "@/store/live";
-import { isDriving, useDestination, usePlan } from "@/store/plan";
+import { isDriving, useDestination, usePlan, withFlight } from "@/store/plan";
 import { colors } from "@/theme";
 import { stagger } from "@/theme/motion";
 
@@ -61,7 +64,14 @@ function Booked() {
       : undefined;
     return buildItinerary(picks, trip, flights, places, drive);
   }, [picks, driving, trip, flights, places]);
-  const text = useMemo(() => summaryText(trip, itinerary), [trip, itinerary]);
+  // Live mode: the message carries a link to the whole plan (app/trip/[id].tsx), with the
+  // picks the group made, so anyone in the chat can open it in full.
+  const planId = useLive((s) => s.planId);
+  const shareUrl = isLive && planId ? planShareUrl(planId, picks) : null;
+  const text = useMemo(
+    () => summaryText(trip, itinerary) + (shareUrl ? `\n\nSee the whole plan: ${shareUrl}` : ""),
+    [trip, itinerary, shareUrl],
+  );
   const STATUS = statusFor(trip);
 
   const card = useRef<ComponentRef<typeof View>>(null);
@@ -145,7 +155,7 @@ function Booked() {
             {status ?? ""}
           </Muted>
           {isLive ? (
-            <LiveBooking />
+            <LiveBooking picks={picks} trip={trip} />
           ) : (
             /* MOCK: booking is simulated (CLAUDE.md "Real vs. mocked"). Said plainly, as a
               footnote. */
@@ -159,7 +169,9 @@ function Booked() {
 
       <Reveal delay={stagger(3)} className="gap-6">
         <View className="gap-1">
-          <Title accessibilityRole="header">Your weekend</Title>
+          <Title accessibilityRole="header">
+            {trip.individuals?.length ? "The group" : "Your weekend"}
+          </Title>
           <BudgetLine itinerary={itinerary} trip={trip} />
           {itinerary.notes.map((note) => (
             <View key={note} className="flex-row items-start gap-2 pt-1">
@@ -168,10 +180,24 @@ function Booked() {
             </View>
           ))}
         </View>
+        <PeopleSection trip={trip} />
         {itinerary.stays.length ? <StaySection stays={itinerary.stays} trip={trip} /> : null}
         {itinerary.days.map((day) => (
           <DaySection key={day.key} day={day} trip={trip} />
         ))}
+        {/* Live plans: what else the agent found, to switch to. */}
+        {isLive ? (
+          <Alternatives
+            trip={trip}
+            flights={flights}
+            places={places}
+            picks={picks}
+            onSwitch={(id, among) =>
+              usePlan.setState((s) => ({ picks: withFlight(s.picks, id, among) }))
+            }
+            onToggle={(id) => usePlan.getState().togglePick(id)}
+          />
+        ) : null}
       </Reveal>
     </Screen>
   );
@@ -179,11 +205,18 @@ function Booked() {
 
 // Live mode (lib/live.ts): the agent's book step, with real places to book each part (SerpAPI
 // booking options), cheapest first. Huddle never pays; each row opens the seller.
-function LiveBooking() {
+function LiveBooking({ picks, trip }: { picks: string[]; trip: Trip }) {
   const booking = useLive((s) => s.booking);
+  const bookedPicks = useLive((s) => s.bookedPicks);
+  const busy = useLive((s) => s.bookingBusy);
+  // Book what the group has picked when the screen opens. After a switch in "Other options",
+  // re-booking waits for a tap, so trying options doesn't spend searches.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: books once, on arrival
   useEffect(() => {
-    useLive.getState().book();
+    useLive.getState().book(picks);
   }, []);
+  const changed =
+    bookedPicks !== null && [...bookedPicks].sort().join() !== [...picks].sort().join();
 
   if (!booking) {
     return <Muted className="text-center">Finding the best places to book…</Muted>;
@@ -195,6 +228,14 @@ function LiveBooking() {
       <Muted numeric className="text-ink">
         {booking.summary}
       </Muted>
+      {changed ? (
+        <Button
+          label="Update booking for your new picks"
+          variant="secondary"
+          loading={busy}
+          onPress={() => useLive.getState().book(picks)}
+        />
+      ) : null}
       {items.map((item) => (
         <View key={item} className="gap-1">
           <Caption className="text-muted">{item}</Caption>
@@ -205,7 +246,7 @@ function LiveBooking() {
               <Pressable
                 key={`${item}-${o.seller}`}
                 accessibilityRole="link"
-                accessibilityLabel={`Book ${item} on ${o.seller}, $${o.priceUsd}`}
+                accessibilityLabel={`Book ${item} on ${o.seller}, $${offerEach(o, trip)} each`}
                 disabled={!o.url}
                 onPress={() => o.url && Linking.openURL(o.url)}
                 className="min-h-11 flex-row items-center justify-between rounded-lg px-2 active:bg-raised"
@@ -215,7 +256,7 @@ function LiveBooking() {
                   {o.official ? " · official" : ""}
                 </Body>
                 <Body numeric className="text-ink">
-                  ${o.priceUsd}
+                  ${offerEach(o, trip)} each
                 </Body>
                 {o.url ? (
                   <ArrowSquareOut size={16} color={colors.muted} style={{ marginLeft: 8 }} />

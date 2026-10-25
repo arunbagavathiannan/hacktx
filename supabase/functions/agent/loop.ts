@@ -1,8 +1,8 @@
 import type { AssistantMessage, ChatModel, LlmMessage } from "../_shared/muse.ts";
 import { describePreferences } from "../_shared/preferences.ts";
 import { describeCall, runTool, toolDefinitions } from "../_shared/tools/index.ts";
-import { pollsDecided } from "../_shared/tools/tally_votes.ts";
 import type { PlanStatus, ToolContext } from "../_shared/tools/types.ts";
+import { agentPicks, individualPlans } from "./individuals.ts";
 import type { StepLog } from "./steps.ts";
 import { verify } from "./verifier.ts";
 
@@ -18,7 +18,13 @@ export const MAX_MODEL_CALLS = 14;
 // being retried against a failing API.
 const MAX_FAILURES_PER_TOOL = 2;
 // Read-only tools: an identical repeat call gets the earlier answer, with no new API call.
-const REPEATABLE = new Set(["extract_trip", "search_flights", "search_hotels", "search_places"]);
+const REPEATABLE = new Set([
+  "extract_trip",
+  "search_flights",
+  "search_ground_transport",
+  "search_hotels",
+  "search_places",
+]);
 
 class ModelLimitError extends Error {}
 
@@ -51,13 +57,18 @@ export interface AgentResult {
 
 const SYSTEM = `You are Huddle, a trip planner for a group chat. Plan the trip the chat is
 talking about by calling tools. Rules:
-- Start with extract_trip. If it lists anything in "missing", call ask_user with one clear
-  question and stop.
+- Start with extract_trip. If it lists anything in "missing", call ask_user with one short
+  question that covers all of it (e.g. "Where to, and what's the budget per person?") and
+  stop. If the trip already has a budgetPerPersonUsd but "budget" is missing, the
+  chat only floated it: ask the group to lock it in ("Lock in about $800 each?") instead of
+  asking for a budget from scratch.
 - Search flights, hotels, things to do and food, then pin_on_map the best 2-4 options per
   category, favouring what the chat asked for and staying within the budget.
+- If the trip is reasonable over land (roughly under 10 hours), also call
+  search_ground_transport and pin the best train, bus or drive option next to the flights, so
+  the group can compare. Skip it for trips across an ocean.
 - Follow the owner's preferences (vibe, budget, food, travel) when you choose what to search
   and pin. Food restrictions are hard rules; vibe and budget are strong leanings.
-- Let the group decide: create_poll for the hotel, then tally_votes.
 - Never call book unless the group has tapped Book. Never invent prices or links; only use
   what the tools returned.
 - You have at most ${MAX_TOOL_CALLS} tool calls. When the plan is ready, reply with a two-sentence
@@ -193,18 +204,23 @@ export async function runAgent(deps: AgentDeps): Promise<AgentResult> {
               ? `, $${(verdict.perPersonUsd ?? 0) - budget} over the $${budget} budget`
               : `, under $${budget}`),
       );
-      // Ready only now that it's verified, and only if no poll is still waiting on votes.
-      const decided = pollsDecided(options, await ctx.store.listVotes(ctx.planId));
-      const ready = current.status === "planning" || (current.status === "voting" && decided);
+      // Ready only now that it's verified.
+      const ready = current.status === "planning";
       // Budget warnings ride along with the summary so the group sees them with the plan.
       const heads = verdict.warnings.length ? `Heads up: ${verdict.warnings.join(" ")}` : "";
       const summary = [pass.text.trim(), heads].filter(Boolean).join("\n\n") || undefined;
-      if (ready || summary) {
-        await ctx.store.updatePlan(ctx.planId, {
-          ...(ready ? { status: "ready" as const } : {}),
-          ...(summary ? { summary } : {}),
-        });
-      }
+      // The agent's choice per category; the rest stay as alternatives the group can switch to.
+      const picks = agentPicks(options);
+      for (const p of picks) await ctx.store.selectOption(ctx.planId, p.category, p.id);
+      const picked = new Set(picks.map((p) => p.id));
+      const chosen = options.map((o) => ({ ...o, isSelected: picked.has(o.id) }));
+      // Each person's version (agent/individuals.ts): same hotel, travel that fits their budget.
+      const individuals = individualPlans(current.trip, chosen);
+      await ctx.store.updatePlan(ctx.planId, {
+        ...(ready ? { status: "ready" as const } : {}),
+        ...(summary ? { summary } : {}),
+        trip: { ...current.trip, individuals },
+      });
       const status = (await ctx.store.getPlan(ctx.planId)).status;
       return { status, toolCalls: calls, verified: true, message: pass.text };
     }

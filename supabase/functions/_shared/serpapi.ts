@@ -4,7 +4,7 @@
 
 import { ToolError } from "./tools/types.ts";
 
-export type Engine = "google_flights" | "google_hotels" | "google_maps";
+export type Engine = "google_flights" | "google_hotels" | "google_maps" | "google_maps_directions";
 
 // How long each engine gets. Live Google Flights regularly takes 6–15 s (a 6 s limit failed
 // a real run); hotels and maps are quicker. Each search tool's own limit is set above these,
@@ -13,6 +13,7 @@ export const ENGINE_TIMEOUT_MS: Record<Engine, number> = {
   google_flights: 15_000,
   google_hotels: 12_000,
   google_maps: 8_000,
+  google_maps_directions: 10_000,
 };
 
 export const hasSerpapiKey = () => Boolean(Deno.env.get("SERPAPI_API_KEY"));

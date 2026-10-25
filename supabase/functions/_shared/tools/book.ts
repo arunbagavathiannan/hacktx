@@ -51,8 +51,12 @@ export const book = defineTool<Args>({
     }
 
     const plan = await ctx.store.getPlan(ctx.planId);
-    // Already booked (e.g. a double tap): hand back that booking, no new SerpAPI lookups.
-    if (plan.status === "booked" && plan.trip.booking) {
+    // Already booked with the same picks (e.g. a double tap): hand back that booking, no new
+    // SerpAPI lookups. Different picks (the group switched an option) book again.
+    const sameRefs = (a: string[], b: string[]) =>
+      a.length === b.length && [...a].sort().join() === [...b].sort().join();
+    const refs = chosen.map((o) => o.ref);
+    if (plan.status === "booked" && plan.trip.booking && sameRefs(plan.trip.booking.refs, refs)) {
       const b = plan.trip.booking;
       return {
         summary: `Already confirmed ${b.confirmationCode} · ${usd(b.totalCents)} total`,

@@ -12,11 +12,10 @@ arguments), a `describe` line for the timeline, and a handler. `index.ts` export
 |---|---|---|
 | `extract_trip` | Who / where / when / budget from **any** chat (one Muse Spark call) → `plans.trip`; gaps go in `missing` so the agent asks | demo trip only when there is no Muse Spark key |
 | `search_flights` | SerpAPI `google_flights` | live with `SERPAPI_API_KEY`; else fixture (AUS → DEN) |
+| `search_ground_transport` | SerpAPI `google_maps_directions`: train / bus (transit) and driving | live only; train/bus fares are "on site" (no price), driving is a gas estimate per person |
 | `search_hotels` | SerpAPI `google_hotels` | live with `SERPAPI_API_KEY`; else fixture (Denver) |
 | `search_places` | SerpAPI `google_maps` (restaurants / activities) | live with `SERPAPI_API_KEY`; else fixture (Denver) |
 | `pin_on_map` | Saves chosen results to `plan_options` (map pins + vote options) | real |
-| `create_poll` | Opens a vote on a category's pinned options | seeds other members' votes (MOCK) |
-| `tally_votes` | Counts votes, marks the winner, sets the plan `ready` | real |
 | `ask_user` | Sets `pending_question`, plan `needs_input` | real |
 | `book` | Live SerpAPI booking options (Google Flights sellers, Google Hotels site prices) with links, cheapest first; total + confirmation code; refuses unless the user tapped Book | MOCK: confirmation code only; no payment (links out to book) |
 

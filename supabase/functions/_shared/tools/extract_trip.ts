@@ -9,11 +9,16 @@ Reply with JSON only, no prose:
  "destination": {"city": "...", "airport": "IATA or null", "lat": number, "lng": number} | null,
  "startDate": "YYYY-MM-DD" | null, "endDate": "YYYY-MM-DD" | null,
  "people": ["names going"], "budgetPerPersonUsd": number | null,
+ "budgets": {"Name": number},
+ "budgetSettled": boolean,
  "constraints": ["short things the group asked for"],
- "missing": ["what the chat didn't settle, from: destination, dates"]}
+ "missing": ["what the chat didn't settle, from: destination, dates, budget"]}
 Turn relative dates ("next weekend", "the 20th") into real dates using today's date. Only use
 what the chat says; use null when it doesn't say. Use the home base as the origin unless the
-chat names another one.`;
+chat names another one. "budgetPerPersonUsd" is a budget the whole group agreed on; "budgets"
+holds budgets people gave for themselves ("im in if it's under 400" from Jordan → {"Jordan": 400}).
+"budgetSettled" is false when a budget was only floated, not agreed ("maybe like 800?", one
+person's guess nobody answered); still fill in that number.`;
 
 const isDate = (v: unknown): v is string => typeof v === "string" && /^\d{4}-\d{2}-\d{2}$/.test(v);
 const str = (v: unknown) => (typeof v === "string" && v.trim() ? v.trim() : undefined);
@@ -38,18 +43,37 @@ function place(v: unknown): Place | undefined {
 export function toTrip(raw: Record<string, unknown>, ctx: ToolContext): Trip {
   const strings = (v: unknown) =>
     Array.isArray(v) ? v.map(str).filter((s): s is string => Boolean(s)) : [];
-  const senders = ctx.chat.map((m) => m.sender);
+  // Huddle posts its own questions in the chat; it's never one of the people going.
+  const isHuddle = (name: string) => /^huddle$/i.test(name.trim());
+  const senders = ctx.chat.map((m) => m.sender).filter((s) => !isHuddle(s));
   const startDate = isDate(raw.startDate) ? raw.startDate : undefined;
   const endDate =
     isDate(raw.endDate) && (!startDate || raw.endDate >= startDate) ? raw.endDate : undefined;
   const destination = place(raw.destination);
-  const budget = num(raw.budgetPerPersonUsd);
+  // Budgets people gave for themselves, by name.
+  const budgets: Record<string, number> = {};
+  if (raw.budgets && typeof raw.budgets === "object") {
+    for (const [name, value] of Object.entries(raw.budgets as Record<string, unknown>)) {
+      const usd = num(value);
+      if (str(name) && usd && usd > 0) budgets[name.trim()] = Math.round(usd);
+    }
+  }
+  // No group budget but people gave their own: plan to the highest, and give tighter budgets
+  // cheaper ways to get there (see agent/individuals.ts).
+  const personal = Object.values(budgets);
+  const budget =
+    num(raw.budgetPerPersonUsd) ?? (personal.length ? Math.max(...personal) : undefined);
 
-  const missing = new Set(strings(raw.missing).filter((m) => m === "destination" || m === "dates"));
+  const asked = ["destination", "dates", "budget"];
+  const missing = new Set(strings(raw.missing).filter((m) => asked.includes(m)));
   if (!destination) missing.add("destination");
   else missing.delete("destination");
   if (!startDate || !endDate) missing.add("dates");
   else missing.delete("dates");
+  // No budget in the chat: ask for one rather than plan against $0. A budget that was only
+  // floated ("maybe like 800?") is kept, and the group is asked to lock it in.
+  if (!budget || budget <= 0 || raw.budgetSettled === false) missing.add("budget");
+  else missing.delete("budget");
 
   return {
     origin: place(raw.origin) ?? ctx.home,
@@ -57,8 +81,17 @@ export function toTrip(raw: Record<string, unknown>, ctx: ToolContext): Trip {
     startDate,
     endDate,
     // The phone owner is always going: their own messages never show up in notifications.
-    people: [...new Set([ctx.userName, ...strings(raw.people), ...senders])],
+    people: [
+      ...new Set([
+        ctx.userName,
+        // The whole group chat goes, not just whoever has spoken.
+        ...(ctx.members ?? []).filter((p) => !isHuddle(p)),
+        ...strings(raw.people).filter((p) => !isHuddle(p)),
+        ...senders,
+      ]),
+    ],
     budgetPerPersonUsd: budget && budget > 0 ? budget : undefined,
+    ...(personal.length ? { budgets } : {}),
     constraints: strings(raw.constraints).slice(0, 8),
     missing: [...missing],
   };
@@ -88,11 +121,9 @@ export const extractTrip = defineTool<Record<string, never>>({
   async run(_args, ctx) {
     let trip: Trip;
     if (ctx.model) {
-      // One Muse Spark call. A failure is reported, not retried; the agent loop stops a
-      // repeat after two failures.
       let raw: Record<string, unknown> | null = null;
-      try {
-        const reply = await ctx.model.complete({
+      const ask = (model: NonNullable<typeof ctx.model>) =>
+        model.complete({
           messages: [
             { role: "system", content: SYSTEM },
             {
@@ -109,10 +140,19 @@ export const extractTrip = defineTool<Record<string, never>>({
             },
           ],
         });
-        raw = parseJsonReply(reply.content);
-      } catch (err) {
-        console.error("extract_trip model call failed", err);
-        throw new ToolError("Couldn't read the chat right now. Ask the group where and when.");
+      // One retry for a quick failure (a dropped connection, a 5xx): reading the chat is what
+      // every later step depends on. A timeout isn't retried; it already took the full wait.
+      for (let attempt = 1; attempt <= 2 && raw === null; attempt++) {
+        try {
+          raw = parseJsonReply((await ask(ctx.model)).content);
+          if (raw === null) break; // a reply, just not JSON: retrying won't help
+        } catch (err) {
+          console.error(`extract_trip model call failed (attempt ${attempt})`, err);
+          const timedOut = err instanceof Error && err.name === "TimeoutError";
+          if (attempt === 2 || timedOut) {
+            throw new ToolError("Couldn't read the chat right now. Ask the group where and when.");
+          }
+        }
       }
       if (!raw)
         throw new ToolError("Couldn't make sense of the chat. Ask the group where and when.");
@@ -120,7 +160,12 @@ export const extractTrip = defineTool<Record<string, never>>({
     } else {
       // MOCK: no Muse Spark key, so use the demo trip. People still come from the real chat.
       const people = [
-        ...new Set([ctx.userName, ...ctx.chat.map((m) => m.sender), ...demoTrip.people]),
+        ...new Set([
+          ctx.userName,
+          ...(ctx.members ?? []),
+          ...ctx.chat.map((m) => m.sender),
+          ...demoTrip.people,
+        ]),
       ];
       trip = { ...demoTrip, people };
     }

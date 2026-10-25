@@ -1,8 +1,8 @@
 import { LinearGradient } from "expo-linear-gradient";
 import { router, useLocalSearchParams } from "expo-router";
-import { ArrowRight, PaperPlaneTilt, ShieldCheck } from "phosphor-react-native";
+import { ArrowRight, ShieldCheck } from "phosphor-react-native";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Pressable, ScrollView, type ScrollViewInstance, TextInput, View } from "react-native";
+import { ScrollView, type ScrollViewInstance, View } from "react-native";
 import Animated, { useReducedMotion } from "react-native-reanimated";
 import { destinationSteps } from "@/components/timeline/destinationSteps";
 import { LiveDot, ProgressBar } from "@/components/timeline/ProgressBar";
@@ -39,10 +39,16 @@ export default function Working() {
 // in over Supabase Realtime. It ends on the plan (map), a question, or an error.
 function LiveWorking({ planId }: { planId: string }) {
   useEffect(() => useLive.getState().watch(planId), [planId]);
+  // Huddle needs the group to decide something (where to go, the budget): it asked in the
+  // chat, so go back there and let them talk it over.
+  const backToChat = () => (router.canGoBack() ? router.back() : router.replace("/plan/incoming"));
   const rows = useLive((s) => s.steps);
   const phase = useLive((s) => s.phase);
-  const question = useLive((s) => s.question);
   const error = useLive((s) => s.error);
+  // biome-ignore lint/correctness/useExhaustiveDependencies: return once, when Huddle asks
+  useEffect(() => {
+    if (phase === "needs_input") backToChat();
+  }, [phase]);
   const steps = useMemo(() => rows.map(toPlaybackStep), [rows]);
   const scroll = useRef<ScrollViewInstance>(null);
 
@@ -66,7 +72,10 @@ function LiveWorking({ planId }: { planId: string }) {
             />
           </Animated.View>
         ) : phase === "needs_input" ? (
-          <AnswerBox question={question} />
+          <View className="gap-3">
+            <Muted className="text-center">Huddle asked the group in the chat.</Muted>
+            <Button label="Back to the chat" onPress={backToChat} />
+          </View>
         ) : phase === "failed" ? (
           <View className="gap-3">
             <Muted className="text-center">{error ?? "Huddle hit a snag."}</Muted>
@@ -125,59 +134,6 @@ function LiveWorking({ planId }: { planId: string }) {
         />
       </View>
     </Screen>
-  );
-}
-
-// Huddle asked the group something (ask_user). The answer joins the chat and the same plan
-// keeps going, live. City chips cover the usual question, "where to?".
-const CITY_CHIPS = destinationSuggestions.map((d) => d.city);
-
-function AnswerBox({ question }: { question: string | null }) {
-  const [text, setText] = useState("");
-  const send = (answer: string) => {
-    const value = answer.trim();
-    if (!value) return;
-    const { vibes, budget, food, maxTravel } = usePreferences.getState();
-    useLive.getState().reply(value, { vibes, budget, food, maxTravel });
-    setText("");
-  };
-  return (
-    <View className="gap-3">
-      <Muted className="text-center">{question ?? "Huddle needs one more detail."}</Muted>
-      <View className="flex-row flex-wrap justify-center gap-2">
-        {CITY_CHIPS.map((city) => (
-          <Pressable
-            key={city}
-            accessibilityRole="button"
-            accessibilityLabel={`Answer ${city}`}
-            onPress={() => send(`Let's do ${city}`)}
-            className="min-h-11 justify-center rounded-full border border-line bg-surface px-4 active:bg-raised"
-          >
-            <Caption className="text-ink">{city}</Caption>
-          </Pressable>
-        ))}
-      </View>
-      <View className="flex-row items-center gap-2">
-        <TextInput
-          value={text}
-          onChangeText={setText}
-          onSubmitEditing={() => send(text)}
-          placeholder="Or type an answer"
-          placeholderTextColor={colors.faint}
-          accessibilityLabel="Answer Huddle"
-          returnKeyType="send"
-          className="h-11 flex-1 rounded-full border border-line bg-surface px-4 font-body text-sm text-ink"
-        />
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel="Send answer"
-          onPress={() => send(text)}
-          className="h-11 w-11 items-center justify-center rounded-full bg-raised active:opacity-80"
-        >
-          <PaperPlaneTilt size={20} color={text.trim() ? colors.accent : colors.faint} />
-        </Pressable>
-      </View>
-    </View>
   );
 }
 

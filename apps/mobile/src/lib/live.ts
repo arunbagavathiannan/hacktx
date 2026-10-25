@@ -1,3 +1,4 @@
+import { homeCities } from "@/components/onboarding/options";
 import type { PlaybackStep } from "@/components/timeline/useStepPlayback";
 import type {
   AgentStep,
@@ -19,6 +20,9 @@ export const LIVE = process.env.EXPO_PUBLIC_HUDDLE_LIVE === "1";
 
 // The id the live plan's destination goes by in the plan store (see mocks/destinations.ts).
 export const LIVE_ID = "live";
+
+// Huddle's own messages in the group chat (it asks the group there when it needs input).
+export const HUDDLE_ID = "huddle";
 
 // Loaded on first use, so the mock demo never needs Supabase env vars.
 const db = async () => (await import("@/lib/supabase")).supabase;
@@ -50,6 +54,17 @@ type PlanRow = {
     budgetPerPersonUsd?: number;
     constraints?: string[];
     missing?: string[];
+    // Each person's version (supabase/functions/agent/individuals.ts).
+    individuals?: {
+      name: string;
+      budgetUsd?: number;
+      travel: string;
+      travelUsd?: number;
+      hotelShareUsd: number;
+      totalUsd: number;
+      overBudgetUsd?: number;
+      note?: string;
+    }[];
   };
 };
 
@@ -70,6 +85,8 @@ type OptionRow = {
 // One place to book one part of the plan (SerpAPI booking options), cheapest first.
 export type LiveOffer = {
   item: string; // what it books: "Frontier · Nonstop", "Catbird"
+  // Hotels: the price is the whole stay for one room (see offerEach for each person's share).
+  category?: "flight" | "hotel" | "restaurant" | "activity";
   seller: string;
   priceUsd: number;
   url?: string;
@@ -84,6 +101,14 @@ export type BookingResult = {
 };
 
 // ---- Calls ----
+
+// The onboarding city as the planner's home base, with its airport when it's a known one.
+function homeFor(city?: string | null) {
+  const name = city?.trim();
+  if (!name) return undefined;
+  const known = Object.entries(homeCities).find(([c]) => c.toLowerCase() === name.toLowerCase());
+  return known ? { city: known[0], ...known[1] } : { city: name };
+}
 
 // Starts a plan from the chat. Returns the plan id right away; the agent keeps working in the
 // background and writes agent_steps as it goes.
@@ -107,10 +132,38 @@ export async function startPlan(input: {
         sentAt: m.at,
       })),
       preferences: input.preferences,
+      // Where the group flies from unless the chat says otherwise (onboarding).
+      home: homeFor(input.preferences.home),
+      // Everyone in the group chat goes, not only whoever has spoken.
+      members: Object.entries(input.names)
+        .filter(([id]) => id !== HUDDLE_ID)
+        .map(([, name]) => name),
     },
   });
   if (error || !data?.plan_id) throw new Error(error?.message ?? "Huddle couldn't start planning");
   return data.plan_id as string;
+}
+
+export type Detection = { isPlan: boolean; confidence: number; summary: string; source?: string };
+
+// Asks the detector (supabase/functions/detect: Muse Spark, keyword fallback) whether the
+// chat is turning into a plan. Small talk never reaches Muse; repeats are cached server-side.
+export async function detectPlan(input: {
+  chat: ChatMessage[];
+  names: Record<string, string>;
+}): Promise<Detection> {
+  const { data, error } = await (await db()).functions.invoke("detect", {
+    body: {
+      user_name: input.names.you ?? "You",
+      messages: input.chat.slice(-30).map((m) => ({
+        sender: input.names[m.from] ?? m.from,
+        text: m.text,
+        sentAt: m.at,
+      })),
+    },
+  });
+  if (error || !data) throw new Error(error?.message ?? "Huddle couldn't read the chat");
+  return data as Detection;
 }
 
 // The timeline so far, then every change as it happens (Supabase Realtime).
@@ -152,10 +205,13 @@ export function watchSteps(planId: string, onSteps: (rows: StepRow[]) => void): 
 export async function fetchPlanStatus(planId: string) {
   const { data } = await (await db())
     .from("plans")
-    .select("status, pending_question")
+    .select("status, pending_question, trip")
     .eq("id", planId)
     .single();
-  return data as Pick<PlanRow, "status" | "pending_question"> | null;
+  if (!data) return null;
+  const row = data as Pick<PlanRow, "status" | "pending_question" | "trip">;
+  // What Huddle still needs from the group: "destination", "dates", "budget".
+  return { ...row, missing: row.trip?.missing ?? [] };
 }
 
 // Everything the post-pick screens need, as one DestinationSuggestion.
@@ -180,41 +236,65 @@ export async function loadDestination(
 
 // The Book tap: the agent fetches live booking offers and confirms. Never takes payment.
 // The offers' links are read back from the saved booking (plans.trip.booking).
-export async function bookPlan(planId: string): Promise<BookingResult> {
+export async function bookPlan(planId: string, optionIds?: string[]): Promise<BookingResult> {
   const client = await db();
   const { data, error } = await client.functions.invoke("agent", {
-    body: { action: "book", plan_id: planId },
+    // The group's current picks (plan_options ids); without them, the agent's choices.
+    body: { action: "book", plan_id: planId, option_ids: optionIds },
   });
   if (error) throw new Error(error.message);
   const result = data as { ok: boolean; summary: string };
+  const saved = await savedBooking(planId);
+  return { ok: result.ok, summary: result.summary, ...saved };
+}
+
+// The booking the agent saved on the plan (plans.trip.booking), with its links, if any.
+async function savedBooking(planId: string) {
+  const client = await db();
   const [plan, options] = await Promise.all([
     client.from("plans").select("trip").eq("id", planId).single(),
-    client.from("plan_options").select("title, details").eq("plan_id", planId),
+    client.from("plan_options").select("title, category, details").eq("plan_id", planId),
   ]);
   const booking = (plan.data?.trip as { booking?: Record<string, unknown> } | undefined)?.booking;
-  const titleByRef = new Map(
-    ((options.data ?? []) as { title: string; details: Record<string, unknown> }[]).map((o) => [
-      String(o.details.ref ?? ""),
-      o.title,
-    ]),
+  type Row = { title: string; category: LiveOffer["category"]; details: Record<string, unknown> };
+  const byRef = new Map(
+    ((options.data ?? []) as Row[]).map((o) => [String(o.details.ref ?? ""), o]),
   );
-  const offers = Array.isArray(booking?.offers)
+  const offers: LiveOffer[] = Array.isArray(booking?.offers)
     ? (booking.offers as Record<string, unknown>[]).map((o) => ({
-        item: titleByRef.get(String(o.ref)) ?? String(o.ref),
+        item: byRef.get(String(o.ref))?.title ?? String(o.ref),
+        category: byRef.get(String(o.ref))?.category,
         seller: String(o.seller ?? ""),
         priceUsd: Math.round(Number(o.priceCents ?? 0) / 100),
         url: str(o.url),
         official: o.official === true,
       }))
     : [];
-  return {
-    ok: result.ok,
-    summary: result.summary,
-    confirmationCode: str(booking?.confirmationCode),
-    offers,
-  };
+  return { confirmationCode: str(booking?.confirmationCode), offers };
 }
 
+// ---- Sharing a plan ----
+
+// Where shared plan links point. Set EXPO_PUBLIC_SHARE_BASE_URL to the hosted web build;
+// otherwise the web build links to wherever it's running (localhost while developing).
+export function planShareUrl(planId: string, picks: string[]): string | null {
+  const base =
+    process.env.EXPO_PUBLIC_SHARE_BASE_URL ??
+    (typeof window !== "undefined" && window.location ? window.location.origin : null);
+  if (!base) return null;
+  const query = picks.length ? `?picks=${picks.map(encodeURIComponent).join(",")}` : "";
+  return `${base.replace(/\/$/, "")}/trip/${planId}${query}`;
+}
+
+// Everything the shared plan page shows. Read-only: plain database reads, no agent or API
+// calls, so opening a link never spends credits.
+export async function loadSharedPlan(planId: string) {
+  const [destination, booking] = await Promise.all([
+    loadDestination(planId, { you: "You" }),
+    savedBooking(planId),
+  ]);
+  return { destination, ...booking };
+}
 // ---- Rows → the app's shapes ----
 
 const KNOWN_TOOLS = new Set<AgentStep["tool"]>([
@@ -305,7 +385,27 @@ export function toDestination(
 
   const flights: Flight[] = options
     .filter((o) => o.category === "flight")
-    .map((o) => {
+    .map((o): Flight => {
+      // Trains, buses and driving (search_ground_transport) ride along with flights.
+      const mode = str(o.details.mode);
+      if (mode && mode !== "fly") {
+        const minutes = num(o.details.duration_min) ?? 0;
+        return {
+          id: o.id,
+          airline: o.title, // "Amtrak · Train", "Drive"
+          depart: "",
+          arrive: "",
+          duration: `${Math.floor(minutes / 60)}h ${String(minutes % 60).padStart(2, "0")}m`,
+          stops: 0,
+          pricePerPerson: Math.round((o.price_cents ?? 0) / 100),
+          pickedBy: pickedBy(o.id),
+          chosen: o.is_selected,
+          url: o.url ?? undefined,
+          source: "serpapi_flights",
+          mode: mode as Flight["mode"],
+          priceKnown: o.price_cents != null,
+        };
+      }
       const { depart, arrive, duration } = flightTimes(o.subtitle);
       return {
         id: o.id,
@@ -316,6 +416,8 @@ export function toDestination(
         stops: num(o.details.stops) ?? 0,
         pricePerPerson: Math.round((o.price_cents ?? 0) / 100),
         pickedBy: pickedBy(o.id),
+        chosen: o.is_selected,
+        url: o.url ?? undefined,
         source: "serpapi_flights",
       };
     });
@@ -340,6 +442,8 @@ export function toDestination(
         blurb: str(o.details.description) ?? o.subtitle ?? "",
         distanceLabel: "",
         pickedBy: pickedBy(o.id),
+        chosen: o.is_selected,
+        url: o.url ?? undefined,
         source: category === "hotel" ? "serpapi_hotels" : "google_places",
       };
     });
@@ -354,7 +458,7 @@ export function toDestination(
   const end = t.endDate ?? start;
   const origin = {
     city: t.origin?.city ?? "Austin",
-    airport: t.origin?.airport ?? "AUS",
+    airport: t.origin?.airport ?? (t.origin?.city ? "" : "AUS"),
     lat: t.origin?.lat ?? 30.1975,
     lng: t.origin?.lng ?? -97.6664,
   };
@@ -375,6 +479,17 @@ export function toDestination(
     members,
     sourceChat: { app: plan.source_app ?? "whatsapp", name: plan.chat_name ?? "Group chat" },
     why,
+    individuals: (t.individuals ?? []).map((p) => ({
+      memberId: idFor(p.name),
+      name: p.name === youName ? "You" : p.name,
+      budget: p.budgetUsd,
+      travel: p.travel,
+      travelUsd: p.travelUsd,
+      hotelShare: p.hotelShareUsd,
+      total: p.totalUsd,
+      overBy: p.overBudgetUsd,
+      note: p.note,
+    })),
   };
 
   const fastest = [...flights].sort((a, b) => a.pricePerPerson - b.pricePerPerson)[0];

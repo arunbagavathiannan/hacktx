@@ -27,10 +27,14 @@ interface Body {
   source_app?: "whatsapp" | "instagram";
   chat_name?: string;
   refs?: string[];
+  // Book: the app's picks as plan_options ids (the app doesn't know refs).
+  option_ids?: string[];
   // Where the group flies from if the chat doesn't say. Defaults to DEMO_HOME.
   home?: { city: string; airport?: string };
   // The phone owner's onboarding answers, in the app's Preferences shape.
   preferences?: unknown;
+  // Everyone in the group chat, so the plan includes people who haven't spoken yet.
+  members?: string[];
 }
 
 // MOCK: no accounts or profiles yet, so the demo group's home base is Austin (HackTX).
@@ -118,6 +122,7 @@ Deno.serve(async (req) => {
     store,
     chat,
     userName: body.user_name ?? "You",
+    members: Array.isArray(body.members) ? body.members.filter((m) => typeof m === "string") : [],
     found: new Map(),
     bookingConfirmed: false,
     model: real ?? undefined,
@@ -129,7 +134,12 @@ Deno.serve(async (req) => {
   if (body.action === "book") {
     // Only reached when the user taps Book: that tap is the confirmation the guardrail needs.
     const options = await store.listOptions(planId);
-    const refs = body.refs?.length ? body.refs : defaultBookingRefs(options);
+    const fromIds = options.filter((o) => body.option_ids?.includes(o.id)).map((o) => o.ref);
+    const refs = body.refs?.length
+      ? body.refs
+      : fromIds.length
+        ? fromIds
+        : defaultBookingRefs(options);
     const index = await steps.start("book", "Preparing the booking");
     const result = await runTool("book", JSON.stringify({ refs }), {
       ...ctx,

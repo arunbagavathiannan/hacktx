@@ -39,11 +39,11 @@ function setup(script?: [string, Record<string, unknown>][]) {
 
 const stay = { location: "Denver", check_in_date: "2026-11-20", check_out_date: "2026-11-22" };
 
-Deno.test("demo run: 8 tool calls, verified, plan ready", async () => {
+Deno.test("demo run: 6 tool calls, verified, plan ready", async () => {
   const { plan, store, log, run } = setup();
   const result = await run();
 
-  assertEquals(result.toolCalls, 8);
+  assertEquals(result.toolCalls, 6);
   assert(result.verified);
   assertEquals(result.status, "ready");
   assertEquals(plan.status, "ready");
@@ -61,8 +61,6 @@ Deno.test("demo run: 8 tool calls, verified, plan ready", async () => {
       "search_places",
       "search_places",
       "pin_on_map",
-      "create_poll",
-      "tally_votes",
       "verify",
     ],
   );
@@ -71,9 +69,14 @@ Deno.test("demo run: 8 tool calls, verified, plan ready", async () => {
     JSON.stringify(log.steps),
   );
   assertEquals(log.steps[1].input, "Searching flights AUS → DEN");
-  // $164 flight + half of Catbird's $378 stay
-  assertEquals(log.steps[8].result, "All 7 options check out · ~$353 each, under $500");
-  assertEquals(store.options.filter((o) => o.isSelected).length, 1);
+  // $164 flight + half of the cheapest hotel (Catbird, $378 for two nights)
+  assertEquals(log.steps[6].result, "All 7 options check out · ~$353 each, under $500");
+  // The agent picks one per category; the rest stay as alternatives to switch to.
+  assertEquals(
+    store.options.filter((o) => o.isSelected).map((o) => o.title),
+    ["Frontier · Nonstop", "Catbird", "Red Rocks Park and Amphitheatre", "Tavernetta"],
+  );
+  assertEquals(store.votes.length, 0);
 });
 
 Deno.test("stops at 10 tool calls", async () => {
@@ -221,42 +224,25 @@ Deno.test("the agent can't book on its own", async () => {
   assertEquals(plan.trip.booking, undefined);
 });
 
-Deno.test("a tallied plan that fails the verifier is never marked ready", async () => {
-  const { plan, log, run } = setup([
+Deno.test("a plan that fails the verifier is never marked ready", async () => {
+  const { plan, run } = setup([
     ["extract_trip", {}],
-    // Wrong check-in date, then a full poll + tally.
+    // Wrong check-in date: the verifier catches it.
     ["search_hotels", { ...stay, check_in_date: "2026-11-21" }],
     ["pin_on_map", { refs: ["hotel_1", "hotel_2"] }],
-    ["create_poll", { category: "hotel", question: "Where should we stay?" }],
-    ["tally_votes", { category: "hotel" }],
   ]);
-  const statusAfterTally: string[] = [];
-  const finish = log.finish;
-  log.finish = async (index, status, result) => {
-    if (log.steps[index].tool === "tally_votes") statusAfterTally.push(plan.status);
-    await finish(index, status, result);
-  };
   const result = await run();
 
-  assertEquals(statusAfterTally, ["voting"]);
   assert(!result.verified);
   assertEquals(result.status, "needs_input");
   // The unverified summary isn't shown to the group.
   assert(!plan.summary?.startsWith("Denver, Nov 20–22"));
 });
 
-Deno.test("verified but a poll is still open: stays voting", async () => {
-  const { plan, run } = setup([
-    ["extract_trip", {}],
-    ["search_hotels", stay],
-    ["pin_on_map", { refs: ["hotel_1", "hotel_2"] }],
-    ["create_poll", { category: "hotel", question: "Where should we stay?" }],
-  ]);
-  const result = await run();
-
-  assert(result.verified);
-  assertEquals(plan.status, "voting");
-  assertMatch(plan.summary ?? "", /^Denver, Nov 20–22/);
+Deno.test("the agent has no poll or vote tools", async () => {
+  const { toolDefinitions } = await import("../_shared/tools/index.ts");
+  const names = toolDefinitions.map((t) => t.function.name);
+  assert(!names.includes("create_poll") && !names.includes("tally_votes"), names.join(", "));
 });
 
 Deno.test("the verifier is told who the phone owner is", async () => {

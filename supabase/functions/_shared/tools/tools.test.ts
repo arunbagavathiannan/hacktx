@@ -34,7 +34,7 @@ function setup() {
 const dates = { outbound_date: "2026-11-20", return_date: "2026-11-22" };
 const stay = { location: "Denver, CO", check_in_date: "2026-11-20", check_out_date: "2026-11-22" };
 
-Deno.test("demo path: extract → search → pin → poll → tally → book", async () => {
+Deno.test("demo path: extract → search → pin → book", async () => {
   const { plan, store, ctx, call } = setup();
 
   const trip = await call("extract_trip");
@@ -79,25 +79,12 @@ Deno.test("demo path: extract → search → pin → poll → tally → book", a
   await call("pin_on_map", { refs: ["hotel_1"] });
   assertEquals(store.options.length, 7);
 
-  const poll = await call("create_poll", { category: "hotel", question: "Where should we stay?" });
-  assert(poll.ok, poll.summary);
-  assertEquals(plan.status, "voting");
-  assertEquals(store.votes.length, 3); // Sam, Arun, Villy; Sidd votes in the app
-
-  const tally = await call("tally_votes", { category: "hotel" });
-  assert(tally.ok, tally.summary);
-  assertMatch(tally.summary, /wins with 2 of 3 votes$/);
-  assertEquals(store.options.filter((o) => o.category === "hotel" && o.isSelected).length, 1);
-  // Not ready yet: only the agent loop marks it ready, after the verifier passes.
-  assertEquals(plan.status, "voting");
-  assertEquals((tally.data as { all_polls_decided: boolean }).all_polls_decided, true);
-
-  const hotel = store.options.find((o) => o.isSelected) ?? store.options[0];
+  const hotel = store.options.find((o) => o.category === "hotel") ?? store.options[0];
 
   // Guardrail: no booking until the user taps Book.
   const early = await call("book", { refs: ["flight_1", hotel.ref] });
   assert(!early.ok);
-  assertEquals(plan.status, "voting");
+  assertEquals(plan.status, "planning");
 
   ctx.bookingConfirmed = true;
   const booked = await call("book", { refs: ["flight_1", hotel.ref] });
@@ -181,7 +168,7 @@ Deno.test("extract_trip lists what the chat didn't settle, and drops bad fields"
   assertEquals(plan.trip.destination?.airport, undefined); // not a 3-letter code
   assertEquals(plan.trip.startDate, undefined); // not a date
   assertEquals(plan.trip.budgetPerPersonUsd, undefined);
-  assertEquals(plan.trip.missing, ["dates"]);
+  assertEquals(plan.trip.missing, ["dates", "budget"]); // -5 isn't a budget
   assertEquals(res.summary, "Chicago · 4 people · dates TBD");
 });
 
@@ -192,18 +179,19 @@ Deno.test("extract_trip with no destination asks instead of guessing Denver", as
 
   assert(res.ok, res.summary);
   assertEquals(plan.trip.destination, undefined);
-  assertEquals(plan.trip.missing.sort(), ["dates", "destination"]);
+  assertEquals(plan.trip.missing.sort(), ["budget", "dates", "destination"]);
   assertEquals(plan.title, "New trip");
 });
 
-Deno.test("extract_trip reports a Muse Spark failure once, no retry, no fake Denver", async () => {
+Deno.test("extract_trip retries a quick Muse Spark failure once, then reports it", async () => {
   const { plan, ctx, call } = setup();
   const model = extractor(new Error("503"));
   ctx.model = model;
   const res = await call("extract_trip");
 
   assert(!res.ok);
-  assertEquals(model.calls, 1);
+  assertEquals(model.calls, 2); // one retry, never more
+  assertEquals(res.summary, "Couldn't read the chat right now. Ask the group where and when.");
   assertEquals(plan.trip.destination, undefined);
 });
 
@@ -267,10 +255,107 @@ Deno.test("clearOptions empties a plan's options and votes for a clean re-run", 
   await call("extract_trip");
   await call("search_hotels", stay);
   await call("pin_on_map", { refs: ["hotel_1", "hotel_2"] });
-  await call("create_poll", { category: "hotel", question: "Where?" });
+  await store.insertVotes("plan-1", [{ optionId: store.options[0].id, voterName: "Sam" }]);
   assert(store.options.length > 0 && store.votes.length > 0);
 
   await store.clearOptions("plan-1");
   assertEquals(store.options.length, 0);
   assertEquals(store.votes.length, 0);
+});
+
+Deno.test("extract_trip asks for a budget only when the chat has none", async () => {
+  const noBudget = setup();
+  noBudget.ctx.model = extractor(
+    '{"destination":{"city":"Austin","airport":"AUS"},"startDate":"2026-12-04","endDate":"2026-12-06"}',
+  );
+  await noBudget.call("extract_trip");
+  assertEquals(noBudget.plan.trip.missing, ["budget"]);
+  assertEquals(noBudget.plan.trip.budgetPerPersonUsd, undefined);
+
+  const withBudget = setup();
+  withBudget.ctx.model = extractor(
+    '{"destination":{"city":"Austin","airport":"AUS"},"startDate":"2026-12-04",' +
+      '"endDate":"2026-12-06","budgetPerPersonUsd":350}',
+  );
+  await withBudget.call("extract_trip");
+  assertEquals(withBudget.plan.trip.missing, []);
+  assertEquals(withBudget.plan.trip.budgetPerPersonUsd, 350);
+});
+
+Deno.test("extract_trip reads budgets people give for themselves", async () => {
+  const { plan, ctx, call } = setup();
+  ctx.model = extractor(
+    '{"destination":{"city":"Dallas","airport":"DFW"},"startDate":"2026-11-20",' +
+      '"endDate":"2026-11-22","budgets":{"Jordan":400,"Priya":"lots","Sam":650}}',
+  );
+  await call("extract_trip");
+  assertEquals(plan.trip.budgets, { Jordan: 400, Sam: 650 }); // "lots" isn't a number
+  // No group-wide budget, so the plan aims at the highest personal one, and nothing is asked.
+  assertEquals(plan.trip.budgetPerPersonUsd, 650);
+  assertEquals(plan.trip.missing, []);
+});
+
+Deno.test("book: same picks reuse the booking, switched picks book again", async () => {
+  const { plan, ctx, call } = setup();
+  await call("extract_trip");
+  await call("search_hotels", stay);
+  await call("pin_on_map", { refs: ["hotel_1", "hotel_2"] });
+  ctx.bookingConfirmed = true;
+
+  await call("book", { refs: ["hotel_1"] });
+  const first = plan.trip.booking?.confirmationCode;
+  const again = await call("book", { refs: ["hotel_1"] });
+  assert(again.summary.startsWith(`Already confirmed ${first}`));
+
+  // The group switched hotels: a new booking for the new pick.
+  const switched = await call("book", { refs: ["hotel_2"] });
+  assert(switched.ok, switched.summary);
+  assert(!switched.summary.startsWith("Already"));
+  assertEquals(plan.trip.booking?.refs, ["hotel_2"]);
+  assert(plan.trip.booking?.confirmationCode !== first);
+});
+
+Deno.test("extract_trip never counts Huddle as one of the people going", async () => {
+  const { plan, ctx, call } = setup();
+  ctx.chat = [
+    { sender: "Sam", text: "paris??", sentAt: "2026-10-25T18:00:00Z" },
+    { sender: "Huddle", text: "Where to, and what's the budget?", sentAt: "2026-10-25T18:01:00Z" },
+    { sender: "Maya", text: "paris, 800 each", sentAt: "2026-10-25T18:02:00Z" },
+  ];
+  ctx.model = extractor(
+    '{"destination":{"city":"Paris","airport":"CDG"},"startDate":"2026-12-04",' +
+      '"endDate":"2026-12-06","people":["Sam","Maya","Huddle"],"budgetPerPersonUsd":800}',
+  );
+  await call("extract_trip");
+  assertEquals(plan.trip.people, ["Sidd", "Sam", "Maya"]);
+});
+
+Deno.test("extract_trip doesn't retry a timeout", async () => {
+  const { ctx, call } = setup();
+  const timeout = new Error("Signal timed out.");
+  timeout.name = "TimeoutError";
+  const model = extractor(timeout);
+  ctx.model = model;
+  const res = await call("extract_trip");
+  assert(!res.ok);
+  assertEquals(model.calls, 1);
+});
+
+Deno.test("a floated budget is kept, and the group is asked to lock it in", async () => {
+  const floated = setup();
+  floated.ctx.model = extractor(
+    '{"destination":{"city":"Paris","airport":"CDG"},"startDate":"2026-12-04",' +
+      '"endDate":"2026-12-06","budgetPerPersonUsd":800,"budgetSettled":false}',
+  );
+  await floated.call("extract_trip");
+  assertEquals(floated.plan.trip.budgetPerPersonUsd, 800);
+  assertEquals(floated.plan.trip.missing, ["budget"]);
+
+  const settled = setup();
+  settled.ctx.model = extractor(
+    '{"destination":{"city":"Paris","airport":"CDG"},"startDate":"2026-12-04",' +
+      '"endDate":"2026-12-06","budgetPerPersonUsd":800,"budgetSettled":true}',
+  );
+  await settled.call("extract_trip");
+  assertEquals(settled.plan.trip.missing, []);
 });

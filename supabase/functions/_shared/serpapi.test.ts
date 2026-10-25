@@ -592,3 +592,87 @@ Deno.test("hotels: https links kept, http sites swapped for Google Hotels, renta
   assert(found[1].url?.startsWith("https://www.google.com/travel/search?q="));
   assertEquals(found[1].details.website, "http://pompadour.example");
 });
+
+Deno.test("search_ground_transport: train and bus from transit, plus a driving estimate", async () => {
+  const c = ctx();
+  await runTool("extract_trip", "{}", c); // 4 people, back Nov 22
+  let res = await runTool("search_ground_transport", "{}", c);
+  const urls = await withSerpapi(
+    (url) =>
+      url.searchParams.get("travel_mode") === "3"
+        ? Response.json({
+            directions: [
+              {
+                travel_mode: "Transit",
+                via: "Amtrak Texas Eagle",
+                distance: 312_000,
+                duration: 19_800,
+                formatted_duration: "5 hr 30 min",
+                formatted_distance: "194 mi",
+                trips: [{ travel_mode: "Transit", title: "Texas Eagle", details: [] }],
+              },
+              {
+                travel_mode: "Transit",
+                distance: 310_000,
+                duration: 14_400,
+                formatted_duration: "4 hr",
+                trips: [{ travel_mode: "Transit", title: "Greyhound 1442" }],
+              },
+            ],
+          })
+        : Response.json({
+            directions: [
+              {
+                travel_mode: "Driving",
+                via: "I-35 N",
+                distance: 314_000, // ~195 mi
+                duration: 11_400,
+                formatted_duration: "3 hr 10 min",
+              },
+            ],
+          }),
+    async () => {
+      res = await runTool(
+        "search_ground_transport",
+        JSON.stringify({ from: "Austin, TX", to: "Dallas, TX", date: "2026-11-20" }),
+        c,
+      );
+    },
+  );
+
+  assert(res.ok, res.summary);
+  assertEquals(res.summary, "Found train, bus, drive options");
+  assertEquals(
+    urls.map((u) => [u.searchParams.get("engine"), u.searchParams.get("travel_mode")]),
+    [
+      ["google_maps_directions", "3"],
+      ["google_maps_directions", "0"],
+    ],
+  );
+  const [train, bus, drive] = [...c.found.values()];
+  assertEquals(train.title, "Amtrak · Train");
+  assertEquals(train.priceCents, undefined); // fare on the seller's site, never made up
+  assertEquals(bus.title, "Greyhound · Bus");
+  assertEquals(drive.title, "Drive");
+  // 195 mi × 2 (round trip) × $0.20 × 1 car ÷ 4 people ≈ $20 each
+  assertEquals(drive.priceCents, 2000);
+  assertEquals(drive.details.return_date, "2026-11-22");
+  assert(drive.url?.startsWith("https://www.google.com/maps/dir/?api=1&origin=Austin"));
+});
+
+Deno.test("search_ground_transport: no land route fails politely", async () => {
+  const c = ctx();
+  let res = await runTool("search_ground_transport", "{}", c);
+  await withSerpapi(
+    () => Response.json({ directions: [] }),
+    async () => {
+      res = await runTool(
+        "search_ground_transport",
+        JSON.stringify({ from: "Austin, TX", to: "Tokyo, Japan", date: "2026-12-17" }),
+        c,
+      );
+    },
+  );
+  assert(!res.ok);
+  assertEquals(res.summary, "No train, bus or driving route to Tokyo, Japan. Stick with flights.");
+});

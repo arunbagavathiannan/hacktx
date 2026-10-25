@@ -53,6 +53,20 @@ export type Trip = {
   members: Member[];
   sourceChat: { app: ChatMessage["app"]; name: string };
   why: string; // one line the agent extracted, e.g. "Red Rocks show on the 15th"
+  // Live plans: each person's version (same hotel, travel that fits their own budget).
+  individuals?: PersonPlan[];
+};
+
+export type PersonPlan = {
+  memberId: string; // Member.id
+  name: string;
+  budget?: number; // their own, else the group's
+  travel: string; // "American · 1 stop", "Drive"
+  travelUsd?: number; // missing when the fare is on the seller's site
+  hotelShare: number;
+  total: number;
+  overBy?: number;
+  note?: string; // why their travel differs from the group's
 };
 
 // What Huddle knows from the chat before the group picks a city: who, when, budget, and
@@ -105,6 +119,8 @@ export type Place = {
   distanceLabel: string; // "8 min from hotel"
   pickedBy: string[]; // Member.id
   source: "google_places" | "serpapi_hotels";
+  chosen?: boolean; // live plans: the agent's pick in its category (the rest are alternatives)
+  url?: string; // live plans: where to book or reserve it
 };
 
 export type Flight = {
@@ -117,6 +133,12 @@ export type Flight = {
   pricePerPerson: number;
   pickedBy: string[];
   source: "serpapi_flights";
+  // Live plans also offer ways to get there by land (search_ground_transport). Missing = fly.
+  mode?: "fly" | "train" | "bus" | "transit" | "drive";
+  // False when the price isn't known up front (train/bus fares are on the seller's site).
+  priceKnown?: boolean;
+  chosen?: boolean; // live plans: the agent's pick for getting there
+  url?: string; // live plans: where to book it
 };
 
 export type AgentStepStatus = "pending" | "running" | "done" | "failed";
@@ -158,4 +180,5 @@ export type Preferences = {
   budget: "$" | "$$" | "$$$" | null;
   food: string[];
   maxTravel: string | null;
+  home?: string | null; // "Austin": where the group flies from unless the chat says otherwise
 };
