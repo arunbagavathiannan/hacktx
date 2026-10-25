@@ -14,7 +14,7 @@ import {
   vibeOptions,
 } from "@/components/onboarding/options";
 import { ProgressBar } from "@/components/onboarding/ProgressBar";
-import { Button, Chip, Label, Muted, Screen, Title } from "@/components/ui";
+import { Body, Button, Chip, Display, Screen } from "@/components/ui";
 import { usePreferences, usePreferencesHydrated } from "@/store/preferences";
 import { colors, icon } from "@/theme";
 
@@ -84,10 +84,10 @@ export default function Onboarding() {
           {step > 0 ? (
             <Button
               label="Back"
-              variant="secondary"
-              icon={<ArrowLeft size={20} color={colors.ink} weight={icon.weight} />}
+              variant="ghost"
+              icon={<ArrowLeft size={20} color={colors.muted} weight={icon.weight} />}
               onPress={() => go(step - 1)}
-              className="px-5"
+              className="px-4"
             />
           ) : null}
           <Button
@@ -120,42 +120,28 @@ export default function Onboarding() {
       </View>
 
       <Animated.View key={step} entering={entering} style={{ flex: 1 }}>
-        <View className="flex-1 gap-6 pt-4">
+        <View className="flex-1 gap-8 pt-6">
+          {/* The progress bar already says which question this is, so no "1 of 4" above it. */}
           <View className="gap-2">
-            <Label>
-              {step + 1} of {steps.length}
-            </Label>
-            <Title className="text-4xl leading-[44px]">{title}</Title>
-            <Muted className="text-base leading-6">{subtitle}</Muted>
+            <Display accessibilityRole="header">{title}</Display>
+            <Body className="text-muted">{subtitle}</Body>
           </View>
 
           {step === 0 ? (
-            <View className="flex-row flex-wrap gap-2.5">
-              {vibeOptions.map(({ label, icon: VibeIcon }) => {
-                const selected = vibes.includes(label);
-                return (
-                  <Chip
-                    key={label}
-                    label={label}
-                    selected={selected}
-                    onPress={() => setPrefs({ vibes: toggle(vibes, label) })}
-                    icon={
-                      VibeIcon ? (
-                        <VibeIcon
-                          size={18}
-                          color={selected ? colors.accent : colors.muted}
-                          weight={selected ? icon.activeWeight : icon.weight}
-                        />
-                      ) : undefined
-                    }
-                  />
-                );
-              })}
+            <View className="flex-row flex-wrap gap-x-2 gap-y-3">
+              {vibeOptions.map(({ label }) => (
+                <Chip
+                  key={label}
+                  label={label}
+                  selected={vibes.includes(label)}
+                  onPress={() => setPrefs({ vibes: toggle(vibes, label) })}
+                />
+              ))}
             </View>
           ) : null}
 
           {step === 1 ? (
-            <View className="gap-3">
+            <View accessibilityRole="radiogroup" accessibilityLabel={title} className="gap-3">
               {budgetOptions.map((o) => (
                 <ChoiceCard
                   key={o.label}
@@ -170,7 +156,7 @@ export default function Onboarding() {
           ) : null}
 
           {step === 2 ? (
-            <View className="flex-row flex-wrap gap-2.5">
+            <View className="flex-row flex-wrap gap-x-2 gap-y-3">
               {foodOptions.map(({ label }) => (
                 <Chip
                   key={label}
@@ -183,13 +169,12 @@ export default function Onboarding() {
           ) : null}
 
           {step === 3 ? (
-            <View className="gap-3">
+            <View accessibilityRole="radiogroup" accessibilityLabel={title} className="gap-3">
               {travelOptions.map((o) => (
                 <ChoiceCard
                   key={o.label}
                   label={o.label}
                   description={o.description}
-                  icon={o.icon}
                   selected={maxTravel === o.label}
                   onPress={() => setPrefs({ maxTravel: o.label })}
                 />

@@ -1,25 +1,18 @@
 import { router, useLocalSearchParams } from "expo-router";
 import {
   ArrowCounterClockwise,
-  BellRinging,
   CaretLeft,
-  Compass,
   DeviceMobile,
-  ForkKnife,
   HandTap,
-  PencilSimple,
   ShieldCheck,
-  Sparkle,
-  Wallet,
 } from "phosphor-react-native";
 import { useState } from "react";
-import { Pressable, Text, View } from "react-native";
-import { IconButton } from "@/components/home/IconButton";
+import { Pressable, View } from "react-native";
 import { budgetOptions } from "@/components/onboarding/options";
 import { ResetConfirm } from "@/components/settings/ResetDemo";
 import { SettingRow } from "@/components/settings/SettingRow";
 import { demoPrefs } from "@/components/summary/personalize";
-import { Button, Card, Label, Muted, Screen, Title } from "@/components/ui";
+import { Button, IconButton, Label, Muted, Screen, Title } from "@/components/ui";
 import type { Preferences } from "@/mocks/types";
 import { usePlan } from "@/store/plan";
 import { usePreferences, usePreferencesHydrated } from "@/store/preferences";
@@ -68,16 +61,16 @@ export default function Settings() {
   };
 
   const rows = [
-    { icon: Sparkle, title: "Vibe", value: prefs.vibes.join(", ") },
-    { icon: Wallet, title: "Budget", value: prefs.budget ? budgetLabel(prefs.budget) : "" },
-    { icon: ForkKnife, title: "Food", value: prefs.food.join(", ") },
-    { icon: Compass, title: "Travel range", value: prefs.maxTravel ?? "" },
+    { label: "Vibe", value: prefs.vibes.join(", ") },
+    { label: "Budget", value: prefs.budget ? budgetLabel(prefs.budget) : "" },
+    { label: "Food", value: prefs.food.join(", ") },
+    { label: "Travel range", value: prefs.maxTravel ?? "" },
   ];
 
   return (
     <Screen
       scroll
-      className="gap-6"
+      className="gap-8"
       footer={
         confirming ? (
           <ResetConfirm onCancel={() => setConfirming(false)} onConfirm={resetDemo} />
@@ -89,55 +82,50 @@ export default function Settings() {
         <Title accessibilityRole="header">Settings</Title>
       </View>
 
-      <View className="gap-3">
+      <View className="gap-2">
         <View className="flex-row items-center justify-between">
-          <Label>Your preferences</Label>
+          <Label accessibilityRole="header">Your preferences</Label>
+          {/* Negative margins keep the 48dp target without pushing the list down. */}
           <Pressable
             accessibilityRole="button"
             accessibilityLabel="Edit preferences"
             onPress={() => router.push("/onboarding?edit=1")}
-            className="min-h-12 flex-row items-center gap-1.5 px-2 active:opacity-60"
+            className="-my-3.5 -mr-3 min-h-12 justify-center px-3 active:opacity-60"
           >
-            <PencilSimple size={18} color={colors.accent} weight={icon.weight} />
-            <Text className="font-body-bold text-sm text-accent">Edit</Text>
+            <Label className="text-accent">Edit</Label>
           </Pressable>
         </View>
-        <Card className="py-1">
+        <View>
           {rows.map((r, i) => (
             <SettingRow
-              key={r.title}
+              key={r.label}
               first={i === 0}
-              icon={r.icon}
-              title={r.title}
-              detail={r.value || NOT_SET}
+              label={r.label}
+              value={r.value || NOT_SET}
               dim={!r.value}
             />
           ))}
-        </Card>
-        <Muted className="px-1">Huddle uses these so it asks your group fewer questions.</Muted>
+        </View>
+        <Muted>Huddle uses these so it asks your group fewer questions.</Muted>
+      </View>
+
+      <View className="gap-2">
+        <Label accessibilityRole="header">Chat access</Label>
+        <View>
+          <SettingRow first label="WhatsApp" value="Coming soon" dim />
+          <SettingRow label="Instagram" value="Coming soon" dim />
+        </View>
+        <Muted>Arrives with the Android notification listener. Nothing to set up here yet.</Muted>
       </View>
 
       <View className="gap-3">
-        <Label>Chat access</Label>
-        <Card className="py-1">
-          <SettingRow
-            first
-            icon={BellRinging}
-            title="Coming soon"
-            detail="Read WhatsApp & Instagram on Android"
-          />
-        </Card>
-        <Muted className="px-1">
-          Arrives with the Android notification listener. Nothing to set up here yet.
-        </Muted>
-      </View>
-
-      <View className="gap-3">
-        <Label>Privacy</Label>
-        <View className="gap-3 px-1">
+        <Label accessibilityRole="header">Privacy</Label>
+        <View className="gap-3">
           {privacy.map(({ icon: LineIcon, text }) => (
             <View key={text} className="flex-row items-start gap-3">
-              <LineIcon size={20} color={colors.good} weight={icon.weight} />
+              <View className="h-5 justify-center">
+                <LineIcon size={18} color={colors.muted} weight={icon.weight} />
+              </View>
               <Muted className="flex-1 text-ink">{text}</Muted>
             </View>
           ))}
@@ -145,7 +133,7 @@ export default function Settings() {
       </View>
 
       <View className="gap-3">
-        <Label>Demo</Label>
+        <Label accessibilityRole="header">Demo</Label>
         <Button
           label="Reset demo"
           variant="secondary"

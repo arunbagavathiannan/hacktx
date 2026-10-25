@@ -34,7 +34,7 @@ export function ResetConfirm({ onCancel, onConfirm }: Props) {
           <Text
             ref={title}
             accessibilityRole="header"
-            className="font-body-bold text-base leading-6 text-ink"
+            className="font-body-semibold text-body text-ink"
           >
             Start the demo over?
           </Text>

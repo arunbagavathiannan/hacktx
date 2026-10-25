@@ -1,19 +1,6 @@
-import {
-  AirplaneTilt,
-  Bank,
-  Car,
-  Coffee,
-  ForkKnife,
-  GlobeHemisphereWest,
-  type Icon,
-  Martini,
-  Mountains,
-  MusicNotes,
-  Tent,
-} from "phosphor-react-native";
 import type { Preferences } from "@/mocks/types";
 
-export type Option = { label: string; title?: string; icon?: Icon; description?: string };
+export type Option = { label: string; title?: string; description?: string };
 
 // The four onboarding questions, in order. Copy lives here so the screen stays small.
 export const steps = [
@@ -40,13 +27,13 @@ export const steps = [
 ] as const satisfies ReadonlyArray<{ key: keyof Preferences; title: string; subtitle: string }>;
 
 export const vibeOptions: Option[] = [
-  { label: "Chill", icon: Coffee },
-  { label: "Adventurous", icon: Mountains },
-  { label: "Foodie", icon: ForkKnife },
-  { label: "Nightlife", icon: Martini },
-  { label: "Outdoorsy", icon: Tent },
-  { label: "Culture", icon: Bank },
-  { label: "Live music", icon: MusicNotes },
+  { label: "Chill" },
+  { label: "Adventurous" },
+  { label: "Foodie" },
+  { label: "Nightlife" },
+  { label: "Outdoorsy" },
+  { label: "Culture" },
+  { label: "Live music" },
 ];
 
 export const budgetOptions: Array<Option & { label: NonNullable<Preferences["budget"]> }> = [
@@ -67,13 +54,9 @@ export const foodOptions: Option[] = [
 ];
 
 export const travelOptions: Option[] = [
-  { label: "Driving distance", icon: Car, description: "Road trips, up to about five hours." },
-  { label: "Short flight (<3h)", icon: AirplaneTilt, description: "Nonstop and there by lunch." },
-  {
-    label: "Anywhere",
-    icon: GlobeHemisphereWest,
-    description: "If the trip is good, distance doesn't matter.",
-  },
+  { label: "Driving distance", description: "Road trips, up to about five hours." },
+  { label: "Short flight (<3h)", description: "Nonstop and there by lunch." },
+  { label: "Anywhere", description: "If the trip is good, distance doesn't matter." },
 ];
 
 // Multi-select toggle. "No restrictions" can't be combined with a restriction.
